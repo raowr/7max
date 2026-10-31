@@ -1,0 +1,14 @@
+
+# CLI tool, only in development environment.
+# https://goframe.org/docs/cli
+gfcli:
+  gen:
+    dao:
+    - link:     "mysql:root:Rwr!124124@tcp(8.155.147.137:3306)/7max"
+      tables:   "log_game"
+      jsonCase: "CamelLower"
+
+  docker:
+    build: "-a amd64 -s linux -p temp -ew"
+    tagPrefixes:
+      - my.image.pub/my-app

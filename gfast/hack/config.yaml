@@ -1,0 +1,10 @@
+# CLI.
+gfcli:
+  gen:
+    dao:
+      - link:            "mysql:root:Rwr!124124@tcp(8.155.147.137:3306)/7max"
+        tables:          ""
+        removePrefix:    "7max"
+        descriptionTag:  true
+        noModelComment:  true
+        path: "./internal/app/user"
