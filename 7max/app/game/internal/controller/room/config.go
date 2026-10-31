@@ -23,9 +23,17 @@ func GetGameCommission() int64 {
 
 // 初始化玩家积分
 func GetGameInitPoint() int64 {
-	pointValue, _ := set_game.SetCache.Get(context.Background(), "point")
+	pointValue, err := set_game.SetCache.Get(context.Background(), "point")
+	if err != nil || pointValue == nil || pointValue.IsNil() {
+		if pointValue != nil && pointValue.IsNil() {
+			return 1000
+		}
+		if cfg, cfgErr := g.Cfg().Get(context.Background(), "game.point"); cfgErr == nil {
+			return cfg.Int64()
+		}
+		return 1000
+	}
 	return pointValue.Int64()
-	//return g.Cfg().MustGet(context.Background(), "game.point").Int64() //初始化积分(玩家初始进来送的积分)
 }
 
 // 初始化玩家积分

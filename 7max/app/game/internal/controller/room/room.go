@@ -161,8 +161,8 @@ func initDeck() []Card {
 		rank := 1 + i
 		isJoker := valueName == "鬼"
 		if isJoker {
-			cardId++
 			for s, suitName := range joker {
+				cardId++
 				deck = append(deck, Card{
 					Id:       cardId,
 					Value:    valueName,
@@ -216,8 +216,8 @@ func (room *Room) dealCards() {
 	//每位玩家5张牌
 	for i := 0; i < 10; i++ {
 		room.Players[i%2].Cards = append(room.Players[i%2].Cards, room.Deck[i])
-		room.Deck = room.Deck[i+1:]
 	}
+	room.Deck = room.Deck[10:]
 }
 
 // 显示玩家的牌
@@ -824,7 +824,7 @@ func (room *Room) GameLoop(ctx context.Context) {
 		var inPoint int64 = 0
 		for _, v := range room.TurnDeck {
 			switch v.Value {
-			case "k", "10":
+			case "K", "10":
 				inPoint += 10
 			case "5":
 				inPoint += 5
@@ -840,14 +840,16 @@ func (room *Room) GameLoop(ctx context.Context) {
 		}
 		//如果不出牌，就从剩余牌堆中补牌
 		for _, v := range room.Players {
-			for i := 0; i < 5-v.CardNum; i++ {
-				if len(room.Deck) <= 0 {
-					break
-				}
-				v.Cards = append(v.Cards, room.Deck[0:1]...)
-				v.CardNum++
+			for len(v.Cards) < 5 && len(room.Deck) > 0 {
+				v.Cards = append(v.Cards, room.Deck[0])
 				room.Deck = room.Deck[1:]
 			}
+			v.CardNum = len(v.Cards) // 以实际牌数为准
+		}
+		//显示本局积分
+		playerInPoint := make(map[int]int64)
+		for _, v := range room.Players {
+			playerInPoint[v.ID] = v.InPoint
 		}
 
 		room.OutStarTime = 0 //人类出牌时间恢复为0
@@ -873,16 +875,18 @@ func (room *Room) GameLoop(ctx context.Context) {
 				}
 				go func(humanPlayer *Player) {
 					data, _ := json.Marshal(struct {
-						Cards          []int `json:"cards"`
-						Current        int   `json:"current"`
-						InPoint        int64 `json:"inPoint"`        //玩家本局累计分数
-						MustPid        int   `json:"mustPid"`        //必须出牌的玩家ID
-						OutCardTimeout int   `json:"outCardTimeout"` //出牌最大时间(单位秒) /s
+						Cards          []int         `json:"cards"`
+						Current        int           `json:"current"`
+						InPoint        map[int]int64 `json:"inPoint"`        //玩家本局累计分数
+						MustPid        int           `json:"mustPid"`        //必须出牌的玩家ID
+						AllCardsNum    int           `json:"allCardsNum"`    //剩余未摸的牌数
+						OutCardTimeout int           `json:"outCardTimeout"` //出牌最大时间(单位秒) /s
 					}{
 						Cards:          cards,
 						Current:        room.Current,
-						InPoint:        player.InPoint,
+						InPoint:        playerInPoint,
 						MustPid:        mustPid,
+						AllCardsNum:    len(room.Deck),
 						OutCardTimeout: GetOutCardTimeout(), //出牌最大时间(单位秒) /s
 					})
 					room.safeSendRoomMessage(msgType, data)
@@ -930,12 +934,18 @@ func (room *Room) GameLoop(ctx context.Context) {
 				mustPid = v.ID //必须出牌的玩家
 			}
 		}
+		// 本轮已出的牌堆
+		room.TurnDeck = append(room.TurnDeck, selectedCards...)
+		cardIds := make([]int, 0)
+		for _, v := range room.TurnDeck {
+			cardIds = append(cardIds, v.Id)
+		}
 
 		//通知用户,出牌，
 		go func() {
 			data, _ := json.Marshal(struct {
 				Pid            int   `json:"pid"`
-				CardIds        []int `json:"cardIds"`
+				CardIds        []int `json:"cardIds"` //本轮已出的牌堆
 				CardType       int   `json:"card_type"`
 				CardsNum       int   `json:"cards_num"`      //剩余牌数
 				Code           int   `json:"code"`           //0成功,非零失败
@@ -944,7 +954,7 @@ func (room *Room) GameLoop(ctx context.Context) {
 				OutCardTimeout int   `json:"outCardTimeout"` //出牌最大时间(单位秒) /s
 			}{
 				Pid:            currentPlayer.ID,
-				CardIds:        indices,
+				CardIds:        cardIds,
 				CardType:       cardType,
 				CardsNum:       currentPlayer.CardNum,
 				Code:           0,

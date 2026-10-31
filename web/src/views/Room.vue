@@ -1,27 +1,38 @@
 <template>
   <div id="room">
-    <!-- Background -->
     <div class="background-container">
       <img src="@/assets/img/bg/indoor.png" alt="室内场景背景图">
     </div>
 
-    <!-- Room Container -->
     <div class="room-container">
-      <!-- Header with back button -->
       <div class="header">
         <div class="back-btn" @click="leaveRoom">
           <img src="@/assets/img/ui/img_return1_bg.png" alt="返回按钮背景">
-          <img src="@/assets/img/ui/img_return1.png" alt="返回" style="position: absolute; left: 0; top: 0;">
+          <img src="@/assets/img/ui/img_return1.png" alt="返回" style="position: absolute; left: 0; top: 0;height: 100%;">
           <img :src="getRoomTitleImage()" alt="房间标题" class="room-title">
         </div>
       </div>
 
-      <!-- Main Content -->
       <div class="main-content">
-        <!-- Players Section -->
+        <div class="controls-section">
+          <div class="game-info">
+            <div class="info-item">
+              <div class="info-label">游戏模式</div>
+              <div class="info-value">{{ state.gameType }}</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">奖励</div>
+              <div class="info-value">{{ state.gameReward }}</div>
+            </div>
+            <div class="info-item">
+              <div class="info-label">房间号</div>
+              <div class="info-value">{{ state.roomId }}</div>
+            </div>
+          </div>
+        </div>
+
         <div class="players-section">
           <div class="player-card" v-for="(player, index) in state.players" :key="index">
-            <!-- 房主标识 -->
             <img v-if="player.isOwner" src="@/assets/img/ui/roomowner.png" class="room-owner-badge" alt="房主标志">
 
             <div class="player-frame">
@@ -33,12 +44,8 @@
                   style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;">
               </div>
 
-              <!-- 玩家内容在玩家框内部 -->
               <div class="player-content">
                 <div class="player-inner">
-                  <!-- <img :src="player.avatar" class="player-avatar" alt="玩家头像"> -->
-
-                  <!-- 名称容器 - 名称叠在背景上面 -->
                   <div class="player-name-container">
                     <img src="@/assets/img/ui/namebg.png" class="player-nameplate" alt="名称背景">
                     <div class="player-name">{{ player.name }}</div>
@@ -58,55 +65,22 @@
           </div>
         </div>
 
-        <!-- Controls and Info Section -->
-        <div class="controls-section">
-          <div class="game-info">
-            <div class="info-item">
-              <div class="info-label">游戏模式</div>
-              <div class="info-value">{{ state.gameType }}</div>
-            </div>
-
-            <div class="info-item">
-              <div class="info-label">奖励</div>
-              <div class="info-value">{{ state.gameReward }}</div>
-            </div>
-
-            <div class="info-item">
-              <div class="info-label">房间号</div>
-              <div class="info-value">{{ state.roomId }}</div>
-            </div>
-          </div>
-
-          <div class="room-actions">
-            <div class="action-btn" @click="addComputer">
-              添加电脑
-            </div>
-            <div class="action-btn" @click="customizeAvatar">
-              调整装扮
-            </div>
-          </div>
+        <div class="ready-btn-container" v-if="playerId == 0">
+          <img v-if=!isReady() src="@/assets/img/ui/btn_start_no.png" class="ready-btn" alt="准备中" >
+          <img v-else src="@/assets/img/ui/btn_start.png" class="ready-btn" alt="已准备" @click="toGame">
         </div>
       </div>
 
-      <!-- Ready Button -->
-      <div class="ready-btn-container" v-if="playerId == 0">
-        <img v-if=!isReady() src="@/assets/img/ui/btn_start_no.png" class="ready-btn" alt="准备中" >
-        <img v-else src="@/assets/img/ui/btn_start.png" class="ready-btn" alt="已准备" @click="toGame">
-      </div>
-
-      <!-- Connection Status Indicator -->
       <div class="connection-status" :class="state.connectionStatusClass">
         {{ state.connectionStatusText }}
       </div>
     </div>
   </div>
-
 </template>
 <script setup>
 import { ref,reactive, onMounted, computed, onBeforeUnmount,onUnmounted } from 'vue'
 import { websocket } from '@/utils/websocket'
 import { audioManager } from '@/utils/audio'
-// 导入星星图片资源（使用 @ 别名，Vite 会自动解析路径）
 import starImg from '@/assets/img/ui/star.png';
 import starDarkImg from '@/assets/img/ui/star_dark.png';
 import bighead15339 from '@/assets/img/touxiang/bighead15339.png';
@@ -114,7 +88,7 @@ import full16020 from '@/assets/img/lihui/full16020.png';
 import bighead15419 from '@/assets/img/touxiang/bighead15419.png';
 import full15418 from '@/assets/img/lihui/full15418.png';
 import { storage } from '@/utils/storage'
-import { getTouxiang } from '@/utils/touxiang'//随机返回一个头像
+import { getTouxiang } from '@/utils/touxiang'
 import {useRoute,useRouter} from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus';
 
@@ -141,24 +115,6 @@ const getInitialPlayers = () => [
     isOwner: false,
     lihui: '',
   },
-  {
-    id: 3,
-    name: '等待中...',
-    avatar: '',
-    stars: 0,
-    ready: false,
-    isOwner: false,
-    lihui: '',
-  },
-  {
-    id: 4,
-    name: '等待中...',
-    avatar: '',
-    stars: 0,
-    ready: false,
-    isOwner: false,
-    lihui: '',
-  }
 ]
 const state = reactive({
   players: getInitialPlayers(),
@@ -166,7 +122,6 @@ const state = reactive({
   gameReward: '100金币',
   roomId: '123456',
 
-  // WebSocket related
   ws: null,
   isConnected: false,
   isConnecting: false,
@@ -190,20 +145,16 @@ const playerId  = ref(0)
 const roomType = ref(0)
 onMounted(() => {
   init()
-   // 页面刷新时自动重连
   reconnectWebSocket(websocket);
 })
 const init = async () => {
-  // 动态解析音频路径
   const bgmUrl = new URL('@/assets/music/game_bg.mp3', import.meta.url).href;
   audioManager.preload('bgm', bgmUrl);
   audioManager.playBGM('bgm');
 
-  // 监听 WebSocket 事件
   websocket.on('message', handleMessage);
   websocket.on('open', () => {
     console.log('room on open');
-    // 连接成功后再执行 toggleReady
     websocket.send({ "type": "getInfo", "data": "", "name": "" })
   });
   websocket.on('error', () => {
@@ -216,22 +167,13 @@ const init = async () => {
     console.log('on close');
   });
 
-  // 检查当前连接状态，如果已经连接，则直接执行 toggleReady
   if (websocket.ws && websocket.ws.readyState === WebSocket.OPEN) {
     console.log('getInfo room on open');
-    // websocket.send({ "type": "getInfo", "data": "", "name": "" })
-    // toggleReady();
   }
 
-    //确定player头像，存于storage
   storage.local.set('player2avatar', getTouxiang())
-  storage.local.set('player3avatar', getTouxiang())
-  storage.local.set('player4avatar', getTouxiang())
-
-  
 }
 
-// 组件卸载时移除回调（关键：防止内存泄漏）
 onUnmounted(() => {
   websocket.off('open', ()=>{console.log('off open');});
   websocket.off('message', ()=>{console.log('off message');});
@@ -241,45 +183,34 @@ onUnmounted(() => {
 
 
 const handleMessage = (data) => {
-  // 处理接收到的消息
   console.log('Received message:', data)
   const parsedData = JSON.parse(data)
   if (parsedData.from != undefined) {
-    //保存玩家id
     storage.local.set('user_id', parsedData.from)
-    //用户ID
     userId.value = parsedData.from
   }
 
-
   if (parsedData.type === "initRoom" || parsedData.type === "createRoom") {
     try {
-        // 解析JSON字符串
         const serverPlayers = JSON.parse(parsedData.data)
 
         state.roomId=serverPlayers[0].RoomID
-        //房间类型
         roomType.value = serverPlayers[0].RoomType
 
-        // 智能合并数据
         initPlayers(serverPlayers)
 
-        // 保留不在服务端返回中的原有玩家（如等待中的空位）
-        // 自动截断超过4个的玩家
         state.players.splice(4)
       } catch (e) {
         console.error('解析玩家数据失败:', e)
       }
   }
   if(parsedData.type === "getInfo"){
-          // 解析JSON字符串
       const data = JSON.parse(parsedData.data)
       state.roomId=data.roomId
-      //房间类型
       roomType.value = data.type
      if (data.isPlaying && route.name !== "Game") {
        storage.local.set('roomInfo', JSON.stringify(data))
-        router.push('/game')  // 跳转到游戏页面
+        router.push('/game')
      }else {
          initPlayers(data.players)
      }
@@ -287,17 +218,12 @@ const handleMessage = (data) => {
 
     if (parsedData.type === "joinRoom" || parsedData.type === "leaveRoom") {
     try {
-        // 解析JSON字符串
         const serverPlayers = JSON.parse(parsedData.data)
 
         state.roomId=serverPlayers[0].RoomID
-        //房间类型
         roomType.value = serverPlayers[0].RoomType
-        // 智能合并数据
         initPlayers(serverPlayers)
 
-        // 保留不在服务端返回中的原有玩家（如等待中的空位）
-        // 自动截断超过4个的玩家
         state.players.splice(4)
       } catch (e) {
         console.error('解析玩家数据失败:', e)
@@ -318,10 +244,8 @@ const handleMessage = (data) => {
 
 }
 const initPlayers = (serverPlayers) => {
-  // 先重置为初始状态
   state.players = getInitialPlayers()
 
-  // 然后根据服务端数据填充
   serverPlayers.forEach(serverPlayer => {
     if (serverPlayer.UserId == userId.value) {
       playerId.value = serverPlayer.ID
@@ -336,38 +260,28 @@ const initPlayers = (serverPlayers) => {
       player.avatar = getAvatarByType(player.isOwner ? serverPlayer.Type : 1)
       player.lihui = getLihuiByType(player.isOwner ? serverPlayer.Type : 1)
       player.ready = true
-      player.stars = 5 // 或者根据服务端数据设置
+      player.stars = 5
     }
   })
 }
-// 添加工具函数（放在script setup顶部）
 const getAvatarByType = (type) => {
   const avatars = [
-    // 替换 require() 为 new URL() 构造路径
-    new URL('@/assets/img/touxiang/bighead15339.png', import.meta.url).href, // 房主头像
-    new URL('@/assets/img/touxiang/bighead15419.png', import.meta.url).href  // 机器人默认头像
+    new URL('@/assets/img/touxiang/bighead15339.png', import.meta.url).href,
+    new URL('@/assets/img/touxiang/bighead15419.png', import.meta.url).href
   ]
-  // 默认头像（找不到对应type时使用）
   return avatars[type] || new URL('@/assets/img/touxiang/bighead15729.png', import.meta.url).href
 }
 
 const getLihuiByType = (type) => {
   const lihuis = [
-    // 替换 require() 为 new URL() 构造路径
-    new URL('@/assets/img/lihui/full16020.png', import.meta.url).href, // 房主立绘
-    new URL('@/assets/img/lihui/full15418.png', import.meta.url).href  // 机器人默认立绘
+    new URL('@/assets/img/lihui/full16020.png', import.meta.url).href,
+    new URL('@/assets/img/lihui/full15418.png', import.meta.url).href
   ]
-  // 默认立绘（找不到对应type时使用）
   return lihuis[type] || new URL('@/assets/img/lihui/full15703.png', import.meta.url).href
 }
 onBeforeUnmount(() => {
   websocket.off('message', handleMessage)
-
 })
-
-const toggleReady = () => {
-  websocket.send({"type":"initRoom","data":"","name":""});
-}
 
 const isReady=() => {
   let ready = true
@@ -382,90 +296,47 @@ const isReady=() => {
 
 const toGame = () => {
   if (isReady()) {
-    // websocket.send({"type":"toGame","data":"","name":""})
     websocket.send({ "type": "play", "data": "", "name": "" })
-    //路由跳到游戏页面，不能立即跳，要等play返回才能跳
-    // router.push({path:'/game'})
   }
-
 }
 
 const leaveRoom=()=>{
   websocket.send({ "type": "leaveRoom", "data": "", "name": "" })
-  //路由跳到游戏页面
   router.push({path:'/index'})
 }
 
 const getRoomTitleImage = () => {
-  // 根据房间类型返回不同的图片路径
   switch (roomType.value) {
     case 1:
-      return new URL('@/assets/img/ui/duanweifang.png', import.meta.url).href; // 好友房
+      return new URL('@/assets/img/ui/duanweifang.png', import.meta.url).href;
     case 2:
-      // 如果有其他类型的房间标题图片，可以在这里添加
       return new URL('@/assets/img/ui/txt_friendroom.png', import.meta.url).href;
     default:
-      // 默认使用当前的房间标题图片
       return new URL('@/assets/img/ui/duanweifang.png', import.meta.url).href;
   }
 }
-
 </script>
+
 <style scoped>
-:root {
-  --primary-color: #ffae4c;
-  --secondary-color: #5d4037;
-  --accent-gold: #ffd700;
-  --text-light: #ffffff;
-  --text-dark: #333333;
-  --bg-overlay: rgba(0, 0, 0, 0.6);
-}
-
-/* 新增根容器样式 */
-#room {
-  position: relative;
-  height: 100vh;
-  overflow: hidden;
-  --primary-color: #ffae4c;
-  --secondary-color: #5d4037;
-  --accent-gold: #ffd700;
-  --text-light: #ffffff;
-  --text-dark: #333333;
-  --bg-overlay: rgba(0, 0, 0, 0.6);
-  color: #ffffff;
-}
-
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
-body {
-  padding: 0;
-  margin: 0;
-  overflow: hidden;
-  height: 100vh;
-  font-family: 'Microsoft YaHei', sans-serif;
-  color: var(--text-light);
-}
-
-
-
-/* 调整房间容器层级 */
-.room-container {
+#room {
   position: relative;
-  z-index: 1;
-  /* 确保内容在背景之上 */
+  height: 100vh;
+  overflow: hidden;
+  color: #ffffff;
+  font-family: 'Microsoft YaHei', sans-serif;
 }
 
 .background-container {
   position: fixed;
-  /* 改为fixed定位 */
   width: 100vw;
   height: 100vh;
   z-index: 0;
-  /* 调整层级为非负值 */
   left: 0;
   top: 0;
 }
@@ -477,69 +348,103 @@ body {
 }
 
 .room-container {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 20px;
-  position: relative;
+  padding: 12px;
+  gap: 12px;
 }
 
 .header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
-  margin-bottom: 20px;
-  position: relative;
-  z-index: 5;
+  flex-shrink: 0;
 }
 
 .back-btn {
   display: flex;
   align-items: center;
   cursor: pointer;
+  position: relative;
   transition: transform 0.2s;
 }
 
-.back-btn:hover {
-  transform: scale(1.05);
+.back-btn:active {
+  transform: scale(0.95);
 }
 
-.back-btn img {
-  height: 80px;
+.back-btn img:first-child {
+  height: 44px;
 }
 
 .room-title {
   position: absolute;
-  left: 100px;
-  top: 0px;
+  left: 44px;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 28px;
 }
 
 .main-content {
-  display: flex;
   flex: 1;
-  gap: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.controls-section {
+  flex-shrink: 0;
+}
+
+.game-info {
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 10px;
+  padding: 10px 14px;
+  display: flex;
+  justify-content: space-around;
+  gap: 10px;
+  backdrop-filter: blur(5px);
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+}
+
+.info-label {
+  font-size: 12px;
+  color: #ffae4c;
+  margin-bottom: 2px;
+}
+
+.info-value {
+  font-size: 14px;
+  font-weight: bold;
 }
 
 .players-section {
-  flex: 3;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2%;
-  justify-content: flex-start;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  align-content: start;
+  margin-top: 20px;
 }
 
 .player-card {
-  width: 23.5%;
   position: relative;
-  margin-bottom: 20px;
+  animation: slideIn 0.5s ease-out;
 }
 
 .player-frame {
-  width: 100%;
   position: relative;
-  height: 80%;
-  padding-top: 150%;
-  /* 增加高度，从130%增加到150% */
+  width: 100%;
+  padding-top: 130%;
 }
 
 .player-bg-container {
@@ -556,12 +461,11 @@ body {
   left: 0;
   width: 100%;
   height: 50%;
-  /* 增加内容区域高度 */
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
-  padding-bottom: 12%;
+  padding-bottom: 8%;
   z-index: 5;
 }
 
@@ -572,18 +476,10 @@ body {
   align-items: center;
 }
 
-.player-avatar {
-  width: 45%;
-  /* 稍微增大头像 */
-  margin-bottom: 6%;
-  z-index: 2;
-}
-
-/* 名称容器 - 新增 */
 .player-name-container {
   position: relative;
-  width: 90%;
-  margin-bottom: 4%;
+  width: 85%;
+  margin-bottom: 2%;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -599,10 +495,9 @@ body {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 90%;
+  width: 85%;
   text-align: center;
-  font-size: 1.3vw;
-  /* 稍微增大字体 */
+  font-size: 12px;
   z-index: 3;
   text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
   overflow: hidden;
@@ -615,24 +510,21 @@ body {
 .player-stars {
   display: flex;
   justify-content: center;
-  width: 90%;
   z-index: 3;
 }
 
 .player-stars img {
-  height: 18px;
-  /* 增大星星大小 */
-  margin: 0 3px;
+  height: 14px;
+  margin: 0 2px;
 }
 
 .player-ready {
   position: absolute;
-  top: 27%;
+  top: 20%;
   left: 50%;
   transform: translate(-50%, -50%);
   z-index: 4;
   width: 45%;
-  /* 增大准备图标 */
   display: none;
 }
 
@@ -641,98 +533,38 @@ body {
   animation: pulse 1.5s infinite;
 }
 
-/* 房主标识位置 */
 .room-owner-badge {
   position: absolute;
-  top: -12px;
-  left: -12px;
-  width: 45%;
-  /* 增大房主标识 */
+  top: -8px;
+  left: -8px;
+  width: 36%;
   z-index: 10;
-}
-
-.controls-section {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-  min-width: 250px;
-}
-
-.game-info {
-  /* background: var(--bg-overlay); */
-  background: rgba(0, 0, 0, 0.6);
-  border-radius: 10px;
-  padding: 15px;
-  backdrop-filter: blur(5px);
-}
-
-.info-item {
-  margin-bottom: 15px;
-  display: flex;
-  flex-direction: column;
-}
-
-.info-label {
-  font-size: 14px;
-  color: var(--primary-color);
-  --primary-color: #ffae4c;
-  margin-bottom: 5px;
-}
-
-.info-value {
-  font-size: 18px;
-  font-weight: bold;
-}
-
-.room-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.action-btn {
-  background: url('@/assets/img/ui/btn_small.png') center/cover no-repeat;
-  height: 70px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s;
-  color: var(--primary-color);
-  --primary-color: #ffae4c;
-  font-size: 25px;
-}
-
-.action-btn:hover {
-  transform: scale(1.05);
-  color: #ffc107;
 }
 
 .ready-btn-container {
-  position: absolute;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 10;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  padding: 4px 0;
 }
 
 .ready-btn {
+  height: 56px;
   cursor: pointer;
   transition: transform 0.2s;
 }
 
-.ready-btn:hover {
-  transform: scale(1.1);
+.ready-btn:active {
+  transform: scale(0.95);
 }
 
 .connection-status {
   position: fixed;
-  bottom: 10px;
-  right: 10px;
-  padding: 5px 10px;
-  border-radius: 5px;
-  font-size: 12px;
+  bottom: 8px;
+  right: 8px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
   z-index: 100;
 }
 
@@ -748,18 +580,15 @@ body {
   background-color: rgba(255, 193, 7, 0.8);
 }
 
-/* Animations */
 @keyframes pulse {
   0% {
     opacity: 0.6;
     transform: translate(-50%, -50%) scale(0.95);
   }
-
   50% {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1.05);
   }
-
   100% {
     opacity: 0.6;
     transform: translate(-50%, -50%) scale(0.95);
@@ -771,175 +600,13 @@ body {
     transform: translateY(20px);
     opacity: 0;
   }
-
   to {
     transform: translateY(0);
     opacity: 1;
   }
 }
 
-.player-card {
-  animation: slideIn 0.5s ease-out;
-}
-
-.player-card:nth-child(2) {
-  animation-delay: 0.1s;
-}
-
-.player-card:nth-child(3) {
-  animation-delay: 0.2s;
-}
-
-.player-card:nth-child(4) {
-  animation-delay: 0.3s;
-}
-
-/* Responsive adjustments */
-@media (max-width: 1200px) {
-  .player-name {
-    font-size: 1.5vw;
-  }
-
-  .player-frame {
-    padding-top: 145%;
-  }
-}
-
-@media (max-width: 900px) {
-  .main-content {
-    flex-direction: column;
-  }
-
-  .controls-section {
-    flex-direction: row;
-    flex-wrap: wrap;
-  }
-
-  .game-info {
-    flex: 2;
-  }
-
-  .room-actions {
-    flex: 1;
-  }
-
-  .player-name {
-    font-size: 1.9vw;
-  }
-
-  .player-frame {
-    padding-top: 140%;
-  }
-}
-
-@media (max-width: 600px) {
-  .players-section {
-    gap: 10px;
-  }
-
-  .player-card {
-    width: 48%;
-  }
-
-  .player-name {
-    font-size: 2.6vw;
-  }
-
-  .header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .room-title {
-    position: static;
-    margin-top: 10px;
-  }
-
-  /* 移动端调整 */
-  .room-owner-badge {
-    width: 38%;
-    top: -10px;
-    left: -10px;
-  }
-
-  .player-avatar {
-    width: 40%;
-  }
-
-  .player-content {
-    height: 52%;
-    padding-bottom: 10%;
-  }
-
-  .player-frame {
-    padding-top: 135%;
-  }
-
-  .player-stars img {
-    height: 16px;
-  }
-}
-
-/* 横屏模式专属样式 */
-@media (max-width: 998px) {
-    .players-section {
-        margin-left: 20px;
-  }
-  .back-btn img {
-    height: 30px;
-}
-
-.room-title {
-    position: absolute;
-    left: 40px;
-    top: 0px;
-}
-.player-card {
-    width: 16%;
-    position: relative;
-    margin-bottom: 20px;
-}
-.ready-btn-container {
-    left: 45%;
-    top: 78%;
-
-}
-
-/* 确保 controls-section 的父容器具有相对定位，作为定位参考 */
-.room-container { /* 假设父容器类名为 room-container，根据实际情况调整 */
-  position: relative; /* 添加此属性 */
-  /* ... 父容器原有样式 ... */
-}
-
-.controls-section {
-  /* 移除可能存在的 float 或 margin 等定位样式 */
-  /* float: right; 如需保留可注释或删除 */
-  
-  /* 设置右上角定位 */
-  position: absolute;
-  top: 0; /* 距离顶部 0px */
-  right: 0; /* 距离右侧 0px */
-  width: 300px; /* 根据需要调整宽度 */
-  /* ... 其他原有基础样式（如背景、内边距等）... */
-}
-.controls-section {
-  /* 原有定位与布局样式 */
-  position: absolute;
-  top: 74px; /* 原 top: 0，增加数值向下移动（如 10px） */
-  right: 40px; /* 原 right: 0，减小数值向左移动（如 10px） */
-  width: 300px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  transform: scale(0.6);
-  transform-origin: top right;
-  /* ... 其他原有样式 ... */
-}
-
-/* 确保子元素占满容器宽度（可选，根据内容需求调整） */
-.game-info, .room-actions {
-  width: 100%; /* 让子元素宽度填满父容器 */
-  /* ... 其他原有样式 ... */
-}
-}
+.player-card:nth-child(2) { animation-delay: 0.1s; }
+.player-card:nth-child(3) { animation-delay: 0.2s; }
+.player-card:nth-child(4) { animation-delay: 0.3s; }
 </style>

@@ -8,11 +8,11 @@
       <!-- login Button -->
       <div class="login-btn-container" v-if="isReady">
           <div class="login-group">
-              <img src="@/assets/img/ui/guest_login.png" class="login-btn" alt="游客进入" @click="toIndex()">
-          </div>
-          <div class="login-group">
               <img src="@/assets/img/ui/user_login.png" class="login-btn" alt="登录游戏" @click="handleLoginButtonClick()">
               <span class="register-text" @click="toRegister()">注册账号</span>
+          </div>
+          <div class="login-group">
+              <img src="@/assets/img/ui/guest_login.png" class="login-btn" alt="游客进入" @click="toIndex()">
           </div>
       </div>
     </div>
@@ -73,7 +73,7 @@ import { websocket } from '@/utils/websocket'
 import { audioManager } from '@/utils/audio'
 
 // 1. 显式引入所有需要预加载的图片（确保 Vite 打包时包含这些资源）
-import cg4Img from '@/assets/img/cg/cg4.png';
+import cgImg from '@/assets/img/cg/cg.png';
 //index.vue 预加载资源
 import titleBgImg from '@/assets/img/ui/title_bg.png';
 import friendRoomImg from '@/assets/img/ui/txt_friendroom.png';
@@ -331,7 +331,7 @@ export default {
       },
       // 所有需要预加载的图片路径（根据实际项目补充）
       imagePaths: [
-        // cg4Img,       // 直接使用 import 后的变量
+        // cgImg,       // 直接使用 import 后的变量
         titleBgImg,   // 新增：标题背景
         friendRoomImg, // 新增：好友房间
         return2Img,   // 新增：返回2图标
@@ -584,7 +584,7 @@ export default {
     // 新增：动态计算背景样式
     backgroundStyle() {
       return {
-        backgroundImage: this.backgroundLoaded ? `url(${cg4Img})` : 'none',
+        backgroundImage: this.backgroundLoaded ? `url(${cgImg})` : 'none',
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundRepeat: 'no-repeat'
@@ -619,7 +619,7 @@ export default {
           this.backgroundLoaded = false;
           resolve(); // 即使失败也继续
         };
-        img.src = cg4Img; // 直接使用导入的变量，不需要 require
+        img.src = cgImg; // 直接使用导入的变量，不需要 require
       });
     },
     // 新增：统一预加载图片和音频
@@ -693,7 +693,7 @@ export default {
         } else {
           console.warn('VITE_WS_URL is not defined, using default WebSocket URL')
           // 可以在这里设置一个默认的 WebSocket URL
-          websocket.connect('ws://127.0.0.1:8000/enter')
+          websocket.connect('ws://127.0.0.1:10000/enter')
         }
       }, 100)
       this.$router.push('/index');
@@ -1026,13 +1026,10 @@ export default {
 }
 
 .login-btn-container {
-  position: absolute;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 10;
   display: flex;
-  gap: 20px; /* 按钮之间的间隔 */
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 24px;
 }
 
 .login-btn {

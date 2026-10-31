@@ -241,7 +241,7 @@ func (c *Client) handleInitRoom(ctx context.Context) {
 		From: c.userID,
 	}
 	c.safeSendMessage(ctx, msgData)
-	if aiCount >= 3 {
+	if aiCount >= 1 {
 		return
 	}
 	// 延迟添加额外AI（带上下文超时，避免协程泄漏）
@@ -261,7 +261,7 @@ func (c *Client) handleInitRoom(ctx context.Context) {
 			return
 		}
 		aiNum := len(roomInfo.Players)
-		for i := 0; i < 4-aiNum; i++ {
+		for i := 0; i < 2-aiNum; i++ {
 			aiName := fmt.Sprintf("帅锅%d号", aiNum+i+1)
 			roomInfo.CreatePlayer(aiName, room.AI)
 		}
@@ -526,7 +526,7 @@ func (c *Client) handlePlay(ctx context.Context) {
 
 	// 启动游戏逻辑（传入上下文，支持取消）
 	//判断人数是否足够
-	if len(roomInfo.Players) < 4 {
+	if len(roomInfo.Players) < 2 {
 		g.Log().Errorf(ctx, "用户 %s 房间人数不足", c.userID)
 		return
 	}
@@ -541,10 +541,9 @@ func (c *Client) handlePlay(ctx context.Context) {
 	roomInfo.IsPlaying = true
 	roomInfo.Status = 1 //游戏中
 	rmMu.Unlock()
-	//如果时好友房,通知房间内每个人开始游戏
-	if roomInfo.Type == 2 {
-		roomInfo.SendRoomMessage(consts.Play, "")
-	}
+	//通知房间内每个人开始游戏
+	roomInfo.SendRoomMessage(consts.Play, "")
+
 	room.PlayOneGame(roomInfo)
 
 	//发送日志 开始游戏
