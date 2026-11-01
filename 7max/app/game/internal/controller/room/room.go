@@ -838,7 +838,11 @@ func (room *Room) GameLoop(ctx context.Context) {
 				v.InPoint += inPoint
 			}
 		}
-		//如果不出牌，就从剩余牌堆中补牌
+		//如果不出牌，就从剩余牌堆中补牌,上一位玩家（赢的）先摸牌
+		prevID := (currentPlayer.ID - 1 + len(room.Players)) % len(room.Players)
+		sort.SliceStable(room.Players, func(i, j int) bool {
+			return room.Players[i].ID == prevID && room.Players[j].ID != prevID
+		})
 		for _, v := range room.Players {
 			for len(v.Cards) < 5 && len(room.Deck) > 0 {
 				v.Cards = append(v.Cards, room.Deck[0])
@@ -846,10 +850,18 @@ func (room *Room) GameLoop(ctx context.Context) {
 			}
 			v.CardNum = len(v.Cards) // 以实际牌数为准
 		}
+		sort.SliceStable(room.Players, func(i, j int) bool {
+			return room.Players[i].ID < room.Players[j].ID
+		})
 		//显示本局积分
 		playerInPoint := make(map[int]int64)
 		for _, v := range room.Players {
 			playerInPoint[v.ID] = v.InPoint
+		}
+
+		playerCardNum := make(map[int]int)
+		for _, v := range room.Players {
+			playerCardNum[v.ID] = v.CardNum
 		}
 
 		room.OutStarTime = 0 //人类出牌时间恢复为0
@@ -880,6 +892,7 @@ func (room *Room) GameLoop(ctx context.Context) {
 						InPoint        map[int]int64 `json:"inPoint"`        //玩家本局累计分数
 						MustPid        int           `json:"mustPid"`        //必须出牌的玩家ID
 						AllCardsNum    int           `json:"allCardsNum"`    //剩余未摸的牌数
+						PlayerCardNum  map[int]int   `json:"playerCardNum"`  //玩家当前牌数
 						OutCardTimeout int           `json:"outCardTimeout"` //出牌最大时间(单位秒) /s
 					}{
 						Cards:          cards,
@@ -887,6 +900,7 @@ func (room *Room) GameLoop(ctx context.Context) {
 						InPoint:        playerInPoint,
 						MustPid:        mustPid,
 						AllCardsNum:    len(room.Deck),
+						PlayerCardNum:  playerCardNum,
 						OutCardTimeout: GetOutCardTimeout(), //出牌最大时间(单位秒) /s
 					})
 					room.safeSendRoomMessage(msgType, data)
@@ -940,6 +954,11 @@ func (room *Room) GameLoop(ctx context.Context) {
 		for _, v := range room.TurnDeck {
 			cardIds = append(cardIds, v.Id)
 		}
+		//最后的一手牌
+		lastOutCards := make([]int, 0)
+		for _, v := range selectedCards {
+			lastOutCards = append(lastOutCards, v.Id)
+		}
 
 		//通知用户,出牌，
 		go func() {
@@ -947,6 +966,7 @@ func (room *Room) GameLoop(ctx context.Context) {
 				Pid            int   `json:"pid"`
 				CardIds        []int `json:"cardIds"` //本轮已出的牌堆
 				CardType       int   `json:"card_type"`
+				LastOutCards   []int `json:"lastOutCards"`   //最后的一手牌
 				CardsNum       int   `json:"cards_num"`      //剩余牌数
 				Code           int   `json:"code"`           //0成功,非零失败
 				Current        int   `json:"current"`        //当前出牌玩家
@@ -955,6 +975,7 @@ func (room *Room) GameLoop(ctx context.Context) {
 			}{
 				Pid:            currentPlayer.ID,
 				CardIds:        cardIds,
+				LastOutCards:   lastOutCards,
 				CardType:       cardType,
 				CardsNum:       currentPlayer.CardNum,
 				Code:           0,

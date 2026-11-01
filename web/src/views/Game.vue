@@ -156,9 +156,7 @@ const state = reactive({
   cards: [1,2,3,4,5],
   allCardsNum: 44,
   player2CardsNum: 5,
-  player3CardsNum: 13,
-  player4CardsNum: 13,
-  outCards: [1,2,3,4,5,6,7,8,9,10],
+  outCards: [],
   lastOutCards: [],
   lastmsg: "",
   mustPid: 0,
@@ -168,8 +166,6 @@ const state = reactive({
   movingCards: [],
   player1Name: "",
   player2Name: "",
-  player3Name: "",
-  player4Name: "",
 
   player1InPoint: 0,
   player2InPoint: 0,
@@ -186,12 +182,8 @@ const selectedCards = ref([])
 
 const countdownPlayer1 = ref(state.outCardTimeout)
 const countdownPlayer2 = ref(state.outCardTimeout)
-const countdownPlayer3 = ref(state.outCardTimeout)
-const countdownPlayer4 = ref(state.outCardTimeout)
 let timer1 = null
 let timer2 = null
-let timer3 = null
-let timer4 = null
 
 const isPlayingCard = ref(false)
 const pendingCards = ref([])
@@ -202,13 +194,9 @@ const scaleFactor = ref(screenWidth.value < 998 ? 0.6 : 1);
 const bgmInitialized = ref(false)
 
 const player2touxiang = ref("")
-const player3touxiang = ref("")
-const player4touxiang = ref("")
 
 const player1pass = ref(false)
 const player2pass = ref(false)
-const player3pass = ref(false)
-const player4pass = ref(false)
 
 const currentPlayerUid = ref(storage.local.get('user_id'))
 const currentPlayerId = ref(0)
@@ -294,8 +282,6 @@ onMounted(() => {
   window.addEventListener('resize', handleResize)
 
   player2touxiang.value = storage.local.get('player2avatar')
-  player3touxiang.value = storage.local.get('player3avatar')
-  player4touxiang.value = storage.local.get('player4avatar')
 })
 
 onUnmounted(() => {
@@ -359,8 +345,6 @@ const initGameWithData =(data) =>{
       switch (getPlayerPosition(data.players[i].ID) + 1) {
         case 1: state.player1Name = data.players[i].Name; break;
         case 2: state.player2Name = data.players[i].Name; break;
-        case 3: state.player3Name = data.players[i].Name; break;
-        case 4: state.player4Name = data.players[i].Name; break;
       }
     }
     if (data.isPlaying) {
@@ -371,8 +355,6 @@ const initGameWithData =(data) =>{
       for (let i = 0; i < data.cardsNum.length; i++) {
         switch (getPlayerPosition(data.cardsNum[i].id) + 1) {
           case 2: state.player2CardsNum = data.cardsNum[i].cardNum; break;
-          case 3: state.player3CardsNum = data.cardsNum[i].cardNum; break;
-          case 4: state.player4CardsNum = data.cardsNum[i].cardNum; break;
         }
       }
       if (data.outCardTimeout !== undefined) {
@@ -391,8 +373,6 @@ const initGameWithData =(data) =>{
       switch (getPlayerPosition(data.lastPid)) {
         case 0: state.lastmsg = state.player1Name + "出了：" + cardsMsg; break;
         case 1: state.lastmsg = state.player2Name + "出了：" + cardsMsg; break;
-        case 2: state.lastmsg = state.player3Name + "出了：" + cardsMsg; break;
-        case 3: state.lastmsg = state.player4Name + "出了：" + cardsMsg; break;
       }
     } else {
       switch (data.status) {
@@ -417,8 +397,6 @@ const handleMessage = (data) => {
     data = JSON.parse(parsedData.data)
     state.cards = data.cards.sort((a, b) => b - a);
     state.player2CardsNum = 5
-    state.player3CardsNum = 5
-    state.player4CardsNum = 5
     if (data.outCardTimeout !== undefined) {
       state.outCardTimeout = data.outCardTimeout
     }
@@ -429,8 +407,6 @@ const handleMessage = (data) => {
     selectedCards.value = []
     player1pass.value = false
     player2pass.value = false
-    player3pass.value = false
-    player4pass.value = false
   }
   if (parsedData.type == "outCard") {
     data = JSON.parse(parsedData.data)
@@ -475,18 +451,10 @@ const handleMessage = (data) => {
         state.lastmsg = state.player2Name + "出了：" + cardsMsg
         player2pass.value = false
         break
-      case 2:
-        state.player3CardsNum = data.cards_num
-        player3pass.value = false
-        break
-      case 3:
-        state.player4CardsNum = data.cards_num
-        player4pass.value = false
-        break
     }
     if (data.code == 0) {
       state.outCards = (data.cardIds)
-      state.lastOutCards = (data.cardIds)
+      state.lastOutCards = (data.lastOutCards)
       if (data.outCardTimeout !== undefined) {
         state.outCardTimeout = data.outCardTimeout
       }
@@ -514,8 +482,6 @@ const handleMessage = (data) => {
       }
      if (getPlayerPosition(data.current) == 0) player1pass.value = false
      else if (getPlayerPosition(data.current) == 1) player2pass.value = false
-     else if (getPlayerPosition(data.current) == 2) player3pass.value = false
-     else if (getPlayerPosition(data.current) == 3) player4pass.value = false
     }
   }
   if (parsedData.type == "pass") {
@@ -523,8 +489,8 @@ const handleMessage = (data) => {
     state.mustPid = data.mustPid
     if (!proactivePass.value) {
       playSound("guo")
-      startCountdown(getPlayerPosition(data.current) + 1, state.outCardTimeout)
     }
+    startCountdown(getPlayerPosition(data.current) + 1, state.outCardTimeout)
     if (data.pid == currentPlayerId.value ){
       proactivePass.value = false
     }
@@ -541,13 +507,14 @@ const handleMessage = (data) => {
 
     state.cards = data.cards.sort((a, b) => b - a);
 
+    state.outCards = []
+
+    state.player2CardsNum = data.playerCardNum?.["1"] ?? 0
 
   }
   if (parsedData.type == "over") {
     clearInterval(timer1)
     clearInterval(timer2)
-    clearInterval(timer3)
-    clearInterval(timer4)
     state.countdownPlayer = 0
     data = JSON.parse(parsedData.data)
     data.forEach(winer=>{
@@ -572,12 +539,11 @@ const handleMessage = (data) => {
     }
     player1pass.value = false
     player2pass.value = false
-    player3pass.value = false
-    player4pass.value = false
     if (state.player1Point <= 0) {
       router.push({ path: '/index' })
     }
     var userInfo = storage.local.get('user')
+    userInfo = userInfo || {"name":"","point":0}
     userInfo.point = state.player1Point
     if (roomType.value == 1) {
       storage.local.set('user', userInfo)
@@ -635,18 +601,18 @@ const toggleCard = (n) => {
 }
 
 const checkOut = () => {
-  console.log(state.outCards)
+  // console.log(state.lastOutCards)
   if (selectedCards.value.length === 0) return false;
   const currentCards = selectedCards.value.map(cardId => {
     return state.deck.find(card => card.id === cardId);
   }).filter(Boolean);
   const lastHand = {
-    cards: state.outCards.map(cardId => {
+    cards: state.lastOutCards.map(cardId => {
       return state.deck.find(card => card.id === cardId);
     }).filter(Boolean),
     isSelf: state.mustPid === currentPlayerId.value,
-    type: state.outCards.length > 0
-      ? cardUtil.getCardType(state.outCards.map(id => state.deck.find(c => c.id === id)).filter(Boolean))
+    type: state.lastOutCards.length > 0
+      ? cardUtil.getCardType(state.lastOutCards.map(id => state.deck.find(c => c.id === id)).filter(Boolean))
       : null
   };
   let res = cardUtil.canPlayCards(currentCards, lastHand);
@@ -656,12 +622,10 @@ const checkOut = () => {
 const startCountdown = (pid, remainOutCardTimeout) => {
   clearInterval(timer1)
   clearInterval(timer2)
-  clearInterval(timer3)
-  clearInterval(timer4)
   state.countdownPlayer = pid
   switch (pid) {
     case 1:
-      clearInterval(timer2); clearInterval(timer3); clearInterval(timer4)
+      clearInterval(timer2)
       countdownPlayer1.value = remainOutCardTimeout
       let isPlayKuaidian = false
       timer1 = setInterval(() => {
@@ -680,7 +644,7 @@ const startCountdown = (pid, remainOutCardTimeout) => {
       }, 1000)
       break
     case 2:
-      clearInterval(timer1); clearInterval(timer3); clearInterval(timer4)
+      clearInterval(timer1)
       countdownPlayer2.value = remainOutCardTimeout
       timer2 = setInterval(() => {
         if (countdownPlayer2.value > 0) {
@@ -691,27 +655,11 @@ const startCountdown = (pid, remainOutCardTimeout) => {
         }
       }, 1000)
       break
-    case 3:
-      clearInterval(timer1); clearInterval(timer2); clearInterval(timer4)
-      countdownPlayer3.value = remainOutCardTimeout
-      timer3 = setInterval(() => {
-        if (countdownPlayer3.value > 0) countdownPlayer3.value--
-        else { clearInterval(timer3); state.countdownPlayer = 0 }
-      }, 1000)
-      break
-    case 4:
-      clearInterval(timer1); clearInterval(timer2); clearInterval(timer3)
-      countdownPlayer4.value = remainOutCardTimeout
-      timer4 = setInterval(() => {
-        if (countdownPlayer4.value > 0) countdownPlayer4.value--
-        else { clearInterval(timer4); state.countdownPlayer = 0 }
-      }, 1000)
-      break
   }
 }
 
 onBeforeUnmount(() => {
-  clearInterval(timer1); clearInterval(timer2); clearInterval(timer3); clearInterval(timer4)
+  clearInterval(timer1); clearInterval(timer2)
 })
 
 const chupai = () => {
@@ -725,7 +673,7 @@ const chupai = () => {
   websocket.send({
     type: "playCard",
     data: JSON.stringify({
-      pid: state.countdownPlayer - 1,
+      pid: currentPlayerId.value,
       cardIds: cardsToPlay,
     }),
   })
@@ -733,8 +681,12 @@ const chupai = () => {
   selectedCards.value = []
   setTimeout(() => {
     state.movingCards = []
-    state.outCards = [...cardsToPlay]
-  }, 500)
+    // state.outCards = [...cardsToPlay]
+    if (state.lastOutCards[0] != cardsToPlay[0]) {
+      state.outCards.push(...cardsToPlay)
+    }
+    console.log("state.outCards:",state.outCards)
+  }, 250)
   playCardTimer.value = setTimeout(() => {
     if (isPlayingCard.value) {
       state.cards = [...originalCards]
@@ -766,7 +718,7 @@ const pass = () => {
   websocket.send({
     type: "playCard",
     data: JSON.stringify({
-      pid: state.countdownPlayer - 1,
+      pid: currentPlayerId.value,
       pass: 1,
     }),
   })
@@ -808,20 +760,10 @@ const resetAvatar = () => {
     player2touxiang.value = player2avatar
     storage.local.set('player2avatar', player2avatar)
   }
-  if (Math.random() > 0.5) {
-    let player3avatar = getTouxiang()
-    player3touxiang.value = player3avatar
-    storage.local.set('player3avatar', player3avatar)
-  }
-  if (Math.random() > 0.5) {
-    let player4avatar = getTouxiang()
-    player4touxiang.value = player4avatar
-    storage.local.set('player4avatar', player4avatar)
-  }
 }
 
 const getPlayerPosition = (playerId) => {
-  const position = (playerId - currentPlayerId.value + 4) % 4
+  const position = (playerId - currentPlayerId.value + 2) % 2
   return position
 }
 </script>

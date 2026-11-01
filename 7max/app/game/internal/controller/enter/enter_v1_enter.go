@@ -589,7 +589,7 @@ func (c *Client) handlePlayCard(ctx context.Context, data string) {
 
 	//如果不是人类出牌时间，返回
 	if player.ID != roomInfo.Current {
-		g.Log().Errorf(ctx, "用户 %s 不是该玩家出牌阶段", c.userID)
+		g.Log().Errorf(ctx, "用户 %s 不是该玩家出牌阶段,当前出牌玩家为:%d", c.userID, roomInfo.Current)
 		return
 	}
 
