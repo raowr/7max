@@ -429,10 +429,13 @@ func isGameOver(room *Room) (isOver bool, overMsgData []*overMsg, winName string
 		return false, nil, ""
 	}
 	//判断胜利玩家
-	sort.Slice(room.Players, func(i, j int) bool {
-		return room.Players[i].InPoint > room.Players[j].InPoint
-	})
 	winer = room.Players[0]
+	for _, player := range room.Players {
+		if player.InPoint > winer.InPoint {
+			winer = player
+		}
+	}
+
 	for _, player := range room.Players {
 		if winer.ID != player.ID {
 			winer.Win += winer.InPoint - player.InPoint

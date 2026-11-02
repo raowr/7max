@@ -96,12 +96,10 @@ func (c *ControllerV1) Enter(ctx context.Context, req *v1.EnterReq) (res *v1.Ent
 		// oldClient.conn.Close() // 关闭旧连接
 
 		oldClient.mutex.Lock()
-		// 关闭sendChan
 		if oldClient.sendChan != nil {
 			close(oldClient.sendChan)
 			oldClient.sendChan = nil
 		}
-		// 关闭roomChan
 		if oldClient.roomChan != nil {
 			close(oldClient.roomChan)
 			oldClient.roomChan = nil
@@ -669,14 +667,20 @@ func (c *Client) handleGetInfo(ctx context.Context) {
 		}
 	}
 
-	// 上一次出牌
+	// 本轮已出的牌堆
 	outCards := make([]int, 0)
-	for _, card := range roomInfo.LastCards {
+	for _, card := range roomInfo.TurnDeck {
 		outCards = append(outCards, card.Id)
 	}
 
+	// 最后的一手牌（用于前端比较大小）
+	lastOutCards := make([]int, 0)
+	for _, card := range roomInfo.LastCards {
+		lastOutCards = append(lastOutCards, card.Id)
+	}
+
 	// 上一位出牌玩家
-	lastPid := (current - 1 + 4) % 4
+	lastPid := (current - 1 + 2) % 2
 
 	// 创建一个临时结构体，只包含可序列化的字段
 	playerDTOs := getPlayers(roomInfo)
@@ -693,10 +697,12 @@ func (c *Client) handleGetInfo(ctx context.Context) {
 		CardsNum             []*message.PlayData `json:"cardsNum"`
 		IsPlaying            bool                `json:"isPlaying"`
 		OutCards             []int               `json:"outCards"`
+		LastOutCards         []int               `json:"lastOutCards"` //最后的一手牌
 		MustPid              int                 `json:"mustPid"`
 		LastPid              int                 `json:"lastPid"`
 		Status               int                 `json:"status"`
-		Type                 int                 `json:"type"` //房间类型 1比赛房，2好友房
+		Type                 int                 `json:"type"`        //房间类型 1比赛房，2好友房
+		AllCardsNum          int                 `json:"allCardsNum"` //剩余未摸的牌数
 	}{
 		RoomId:               roomInfo.ID,
 		Players:              playerDTOs,
@@ -708,10 +714,12 @@ func (c *Client) handleGetInfo(ctx context.Context) {
 		CardsNum:             cardsNum,
 		IsPlaying:            isPlaying,
 		OutCards:             outCards,
+		LastOutCards:         lastOutCards,
 		MustPid:              mustPid,
 		LastPid:              lastPid,
 		Status:               status,
 		Type:                 roomType,
+		AllCardsNum:          len(roomInfo.Deck),
 	})
 	if err != nil {
 		g.Log().Errorf(ctx, "用户 %s 序列化房间信息失败: %v", c.userID, err)
@@ -759,10 +767,15 @@ func (c *Client) readServe(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			g.Log().Infof(ctx, "用户 %s readServe退出（上下文关闭）房间", c.userID)
+			g.Log().Debugf(ctx, "用户 %s readServe退出（上下文关闭）房间", c.userID)
 			return
 
-		case newRoom := <-currentRoomChan:
+		case newRoom, ok := <-currentRoomChan:
+			// 通道已关闭（如重连/断连时被清理），退出读房间协程
+			if !ok {
+				g.Log().Infof(ctx, "用户 %s roomChan已关闭，readServe退出", c.userID)
+				return
+			}
 			// 切换到新房间前先检查newRoom是否为空
 			if newRoom == nil {
 				g.Log().Warningf(ctx, "用户 %s 接收到空的房间信息", c.userID)
@@ -817,12 +830,12 @@ func (c *Client) readServe(ctx context.Context) {
 
 // 写消息循环：发送消息到客户端
 func (c *Client) writeLoop(ctx context.Context) {
-	defer g.Log().Infof(ctx, "用户 %s writeLoop退出", c.userID)
-	g.Log().Infof(ctx, "用户 %s 收到用户消息: ", c.userID)
+	defer g.Log().Debugf(ctx, "用户 %s writeLoop退出", c.userID)
+	g.Log().Infof(ctx, "用户 %s 关闭连接2", c.userID)
 	for {
 		// 检查连接是否已关闭
 		if atomic.LoadInt32(&c.closed) == 1 {
-			g.Log().Infof(ctx, "用户 %s 连接已关闭，写循环退出", c.userID)
+			g.Log().Debugf(ctx, "用户 %s 连接已关闭，写循环退出", c.userID)
 			return
 		}
 		var roomID string
@@ -860,7 +873,8 @@ func (c *Client) writeLoop(ctx context.Context) {
 					return
 				}
 			case <-ctx.Done():
-				g.Log().Infof(ctx, "用户 %s writeLoop退出2 房间 %s", c.userID, roomID)
+				g.Log().Debugf(ctx, "用户 %s writeLoop退出2 房间 %s", c.userID, roomID)
+				g.Log().Infof(ctx, "用户 %s 关闭连接1", c.userID)
 				return
 			}
 		}
@@ -871,8 +885,8 @@ func (c *Client) writeLoop(ctx context.Context) {
 func (c *Client) heartbeatCheck(ctx context.Context) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
-	defer g.Log().Infof(ctx, "用户 %s 心跳检测退出", c.userID)
-	g.Log().Infof(ctx, "heartbeatCheck: %v", time.Since(c.heartbeat))
+	defer g.Log().Debugf(ctx, "用户 %s 心跳检测退出", c.userID)
+	g.Log().Debugf(ctx, "heartbeatCheck: %v", time.Since(c.heartbeat))
 	for {
 		select {
 		case <-ticker.C:
@@ -884,7 +898,7 @@ func (c *Client) heartbeatCheck(ctx context.Context) {
 				return
 			}
 		case <-ctx.Done():
-			g.Log().Infof(ctx, "用户 %s 心跳检测被取消: %v", c.userID, ctx.Err())
+			g.Log().Debugf(ctx, "用户 %s 心跳检测被取消: %v", c.userID, ctx.Err())
 			return
 		}
 	}

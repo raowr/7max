@@ -668,7 +668,11 @@ export default {
       // 如果有用户信息，尝试连接 websocket
       const node = userData.node || userData.Node;
       if (!node) {
-        console.log('用户信息不完整');
+        console.log('用户信息 node 不完整');
+        return;
+      }
+      if (!userData.username || !userData.token) {
+        console.log('用户信息 username 或 token 不完整');
         return;
       }
       // 尝试连接 websocket
@@ -678,12 +682,26 @@ export default {
     toIndex() {
         // 延迟连接 WebSocket，确保应用先加载
         let wsUrl = import.meta.env.VITE_WS_URL;
+        let wsPart = import.meta.env.VITE_WS_PART;
+        // 读取已有用户信息并保留 username/token，只更新 node，避免把登录信息覆盖成空
+        let storedUser = storage.local.get("user");
+        let userData = {};
+        if (storedUser) {
+          try {
+            userData = (typeof storedUser === 'string') ? JSON.parse(storedUser) : storedUser;
+          } catch (e) {
+            userData = {};
+          }
+        }
+        // node 仅作占位；连接 URL 统一在 reconnectWebSocket/此处用 VITE_WS_URL 拼
+        userData.node = wsUrl;
+        storage.local.set("user", userData)
       setTimeout(() => {
         if (wsUrl) {
           console.log('user_id:', storage.local.get("user_id"))
     // 初始化 WebSocket 配置（全局一次）
           websocket.init({
-            url: wsUrl+"?user_id="+storage.local.get("user_id"), // 后端地址
+            url: `ws://${wsUrl}${wsPart}?user_id=`+storage.local.get("user_id"), // 后端地址
             reconnectInterval: 5000, // 5秒重连一次
             heartbeatInterval: 10000 // 20秒一次心跳
           });
@@ -693,7 +711,7 @@ export default {
         } else {
           console.warn('VITE_WS_URL is not defined, using default WebSocket URL')
           // 可以在这里设置一个默认的 WebSocket URL
-          websocket.connect('ws://127.0.0.1:10000/enter')
+          websocket.connect(`ws://${wsUrl}${wsPart}`)
         }
       }, 100)
       this.$router.push('/index');
@@ -726,6 +744,7 @@ export default {
         const token = userData.token || userData.Token;
         
         // 构建 WebSocket URL
+        // node 为纯地址(不含协议和 /enter)，统一加协议和路径
         const wsUrl = `ws://${node}/enter?user_name=${encodeURIComponent(username)}&token=${encodeURIComponent(token)}`;
         
         console.log('尝试连接 WebSocket:', wsUrl);

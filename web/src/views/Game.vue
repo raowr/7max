@@ -42,19 +42,19 @@
     </section>
 
 
-        <section class="info-panel">
+    <section class="info-panel">
       <div class="info-row">剩余牌数：{{ state.allCardsNum }}</div>
       <div class="info-row">本局得分：{{ state.player1InPoint }}</div>
     </section>
 
-    <section  class="actions-area">
+    <section class="actions-area">
       <img  src='@/assets/img/btn_buchu.png' class="action-btn buchu"
         :style="{ transform: isPassBtnPressed ? 'scale(0.9)' : 'scale(1)' }"
         @click='pass()' @mousedown="isPassBtnPressed = true" @mouseup="isPassBtnPressed = false"
         @mouseleave="isPassBtnPressed = false" @touchstart="isPassBtnPressed = true"
         @touchend="isPassBtnPressed = false">
         
-      <div class="cd-wrap">
+      <div :style="{ visibility: state.countdownPlayer == 1 ? 'visible' : 'hidden' }" class="cd-wrap">
         <svg width="56" height="56">
           <circle cx="28" cy="28" r="24" stroke="#eee" stroke-width="4" fill="transparent"/>
           <circle cx="28" cy="28" r="24"
@@ -343,15 +343,16 @@ const initGameWithData =(data) =>{
     }
     for (let i = 0; i < data.players.length; i++) {
       switch (getPlayerPosition(data.players[i].ID) + 1) {
-        case 1: state.player1Name = data.players[i].Name; break;
-        case 2: state.player2Name = data.players[i].Name; break;
+        case 1: state.player1Name = data.players[i].Name; state.player1InPoint = data.players[i].InPoint; break;
+        case 2: state.player2Name = data.players[i].Name; state.player2InPoint = data.players[i].InPoint; break;
       }
     }
     if (data.isPlaying) {
       state.outCards = (data.outCards)
-      state.lastOutCards = (data.outCards)
+      state.lastOutCards = (data.lastOutCards || [])
       state.mustPid = data.mustPid
       state.cards = data.cards.sort((a, b) => b - a);
+      state.allCardsNum = data.allCardsNum
       for (let i = 0; i < data.cardsNum.length; i++) {
         switch (getPlayerPosition(data.cardsNum[i].id) + 1) {
           case 2: state.player2CardsNum = data.cardsNum[i].cardNum; break;
@@ -407,6 +408,13 @@ const handleMessage = (data) => {
     selectedCards.value = []
     player1pass.value = false
     player2pass.value = false
+
+    state.player1InPoint = 0
+    state.player2InPoint = 0
+
+    state.outCards = []
+
+    state.allCardsNum = 44
   }
   if (parsedData.type == "outCard") {
     data = JSON.parse(parsedData.data)
@@ -454,7 +462,7 @@ const handleMessage = (data) => {
     }
     if (data.code == 0) {
       state.outCards = (data.cardIds)
-      state.lastOutCards = (data.lastOutCards)
+      state.lastOutCards = (data.lastOutCards || [])
       if (data.outCardTimeout !== undefined) {
         state.outCardTimeout = data.outCardTimeout
       }
@@ -508,6 +516,7 @@ const handleMessage = (data) => {
     state.cards = data.cards.sort((a, b) => b - a);
 
     state.outCards = []
+    state.lastOutCards = []
 
     state.player2CardsNum = data.playerCardNum?.["1"] ?? 0
 
@@ -548,6 +557,15 @@ const handleMessage = (data) => {
     if (roomType.value == 1) {
       storage.local.set('user', userInfo)
     }
+
+    state.player1InPoint = 0
+    state.player2InPoint = 0
+
+    state.outCards = []
+
+    state.player2CardsNum = 0
+
+    state.allCardsNum = 44
   }
   if (parsedData.type === "play") {
     showGameOverModal.value = false
@@ -850,6 +868,7 @@ const getPlayerPosition = (playerId) => {
   max-width: 64px;
   max-height: 64px;
   flex-shrink: 1;
+  transform: translate(-8px, -8px);
 }
 
 .cd-num {

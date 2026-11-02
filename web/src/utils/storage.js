@@ -1,6 +1,6 @@
 // src/utils/storage.js
 // 定义统一前缀（可根据项目名或功能自定义）
-const PREFIX = 'max2_' // 例如：项目名为 max2，前缀设为 max2_
+const PREFIX = '7max_' // 例如：项目名为 max2，前缀设为 max2_
 
 export const storage = {
     // localStorage 操作（带前缀）
