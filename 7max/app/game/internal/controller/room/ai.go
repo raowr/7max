@@ -56,6 +56,12 @@ func DecideCards(player, landlord *Player, lastPH int, lastCards []Card) (pokerH
 					}
 				}
 				//寻找大于上一手牌的最小对子，先找出对子里最大的id,和上一手牌的id比较
+				lastCardsMaxCard := lastCards[0]
+				for _, v1 := range lastCards {
+					if v1.Id > lastCardsMaxCard.Id {
+						lastCardsMaxCard = v1
+					}
+				}
 				for _, v := range pairCardAll {
 					maxCard := v[0]
 					for _, v1 := range v {
@@ -63,11 +69,9 @@ func DecideCards(player, landlord *Player, lastPH int, lastCards []Card) (pokerH
 							maxCard = v1
 						}
 					}
-					for _, v1 := range lastCards {
-						if maxCard.Id > v1.Id {
-							playCards = v
-							break
-						}
+					if maxCard.Id > lastCardsMaxCard.Id {
+						playCards = v
+						break
 					}
 				}
 			}
