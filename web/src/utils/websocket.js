@@ -102,6 +102,7 @@ class WebSocketService {
     this.stopHeartbeat();
     this.heartbeatTimer = setInterval(() => {
       if (this.ws?.readyState === WebSocket.OPEN) {
+        console.log('发送心跳 ping');
         this.send({ type: 'heartbeat', data: 'ping' });
       }
     }, this.heartbeatInterval);

@@ -11,7 +11,14 @@ import (
 )
 
 func SendLog(logInfo LogInfo) {
-	LogChan <- logInfo
+	if LogChan == nil {
+		return
+	}
+	select {
+	case LogChan <- logInfo:
+	default:
+		g.Log().Warningf(context.Background(), "LogChan 已满，丢弃日志: %+v", logInfo)
+	}
 }
 func GetLogChan() {
 	ctx, cancel = context.WithCancel(context.Background())
@@ -21,17 +28,16 @@ func GetLogChan() {
 	conn := grpcx.Client.MustNewGrpcClientConn("log-service")
 	logClient = v1.NewLogGameClient(conn)
 
-	// 启动异步任务
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
-				g.Log().Infof(ctx, "日志异步任务通道收到退出信号，正在清理...")
+				g.Log().Infof(context.Background(), "日志异步任务通道收到退出信号，正在清理...")
 				return
-			default:
-				// 执行异步操作
-				logInfo := <-LogChan
-				g.Log().Infof(ctx, "执行日志异步任务: %v", logInfo)
+			case logInfo, ok := <-LogChan:
+				if !ok {
+					return
+				}
 				sendLogToService(logInfo)
 			}
 		}

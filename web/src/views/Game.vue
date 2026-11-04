@@ -211,46 +211,23 @@ const handleResize = () => {
 };
 
 const fetchGameDataFromWebSocket = () => {
-  const sendGetInfo = (retryCount = 0) => {
-    if (!websocket.ws || websocket.ws.readyState !== WebSocket.OPEN) {
-      if (retryCount < 5) {
-        setTimeout(() => sendGetInfo(retryCount + 1), 100);
-      }
-      return;
-    }
+  const sendGetInfoOnce = () => {
+    if (!websocket.ws || websocket.ws.readyState !== WebSocket.OPEN) return;
     websocket.send({ "type": "getInfo", "data": "", "name": "" });
-    const timeout = setTimeout(() => {
-      if (retryCount < 5) {
-        sendGetInfo(retryCount + 1);
-      }
-    }, 500);
-    const handleMessageOnce = (data) => {
-      try {
-        const parsedData = typeof data === 'string' ? JSON.parse(data) : data;
-        if (parsedData.type === "getInfo") {
-          clearTimeout(timeout);
-          websocket.off('message', handleMessageOnce);
-        }
-      } catch (e) {}
-    };
-    websocket.on('message', handleMessageOnce);
   };
-  websocket.on('open', sendGetInfo);
-  if (websocket.ws) {
-    if (websocket.ws.readyState === WebSocket.OPEN) {
-      sendGetInfo();
-    } else if (websocket.ws.readyState === WebSocket.CONNECTING) {
-      console.log('game WebSocket 正在连接中，等待 open 事件');
-    } else {
-      console.log('game WebSocket 未连接，等待重连');
-    }
-  }
-}
+  sendGetInfoOnce();
+};
+
+const handleOpenForGetInfo = () => {
+  fetchGameDataFromWebSocket();
+};
 
 onMounted(() => {
   state.deck = initDeck()
-  reconnectWebSocket(websocket);
-
+  if (!websocket.ws ||websocket.ws.readyState !== WebSocket.OPEN) {
+    console.log('game WebSocket 未连接，等待重连');
+    reconnectWebSocket(websocket);
+  }
   const bgmUrl = new URL('@/assets/music/game_bg1.mp3', import.meta.url).href;
   audioManager.preload('bgm', bgmUrl);
   const initBGMOnInteraction = () => {
@@ -279,20 +256,18 @@ onMounted(() => {
   }
 
   websocket.on('message', handleMessage)
+  websocket.on('open', handleOpenForGetInfo)
   window.addEventListener('resize', handleResize)
 
   player2touxiang.value = storage.local.get('player2avatar')
 })
 
-onUnmounted(() => {
-  websocket.off('open', () => {});
-  websocket.off('message', () => {});
-  websocket.off('error', () => {});
-  websocket.off('close', () => {});
-  document.removeEventListener('click', () => {});
-  document.removeEventListener('touchstart', () => {});
-  window.removeEventListener('resize', handleResize);
-});
+onBeforeUnmount(() => {
+  websocket.off('message', handleMessage)
+  websocket.off('open', handleOpenForGetInfo)
+  window.removeEventListener('resize', handleResize)
+  clearInterval(timer1); clearInterval(timer2)
+})
 
 const initDeck = () => {
     const values = ["4", "6", "8", "9", "10", "J", "Q", "K", "A", "3", "2", "5", "鬼", "7"];
@@ -386,7 +361,7 @@ const initGameWithData =(data) =>{
 }
 
 const handleMessage = (data) => {
-  console.log('Received message:', data)
+  console.log('game Received message:', data)
   const parsedData = JSON.parse(data)
   if (parsedData.type == "getInfo") {
     data = JSON.parse(parsedData.data)
@@ -675,10 +650,6 @@ const startCountdown = (pid, remainOutCardTimeout) => {
       break
   }
 }
-
-onBeforeUnmount(() => {
-  clearInterval(timer1); clearInterval(timer2)
-})
 
 const chupai = () => {
   if (isPlayingCard.value) return false

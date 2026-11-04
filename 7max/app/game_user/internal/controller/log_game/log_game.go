@@ -62,7 +62,7 @@ func SendLog(logInfo *v1.SendLogReq) {
 		// 发送成功
 	default:
 		// 通道满，丢弃日志
-		g.Log().Warning(ctx, "日志通道已满，丢弃日志")
+		g.Log().Warningf(context.Background(), "LogChan 已满，丢弃日志: %+v", logInfo)
 	}
 }
 

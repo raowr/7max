@@ -145,27 +145,36 @@ const playerId  = ref(0)
 const roomType = ref(0)
 onMounted(() => {
   init()
-  reconnectWebSocket(websocket);
+      if (!websocket.ws || 
+        websocket.ws.readyState === WebSocket.CLOSED || 
+        websocket.ws.readyState === WebSocket.CLOSING) {
+        reconnectWebSocket(websocket);
+    }
+  
 })
+const onRoomOpen = () => {
+  console.log('room on open');
+  websocket.send({ "type": "getInfo", "data": "", "name": "" })
+}
+const onRoomError = () => {
+  state.players.forEach(player => {
+    player.ready = false
+  })
+  console.log('on error');
+}
+const onRoomClose = () => {
+  console.log('on close');
+}
+
 const init = async () => {
   const bgmUrl = new URL('@/assets/music/game_bg.mp3', import.meta.url).href;
   audioManager.preload('bgm', bgmUrl);
   audioManager.playBGM('bgm');
 
   websocket.on('message', handleMessage);
-  websocket.on('open', () => {
-    console.log('room on open');
-    websocket.send({ "type": "getInfo", "data": "", "name": "" })
-  });
-  websocket.on('error', () => {
-    state.players.forEach(player => {
-      player.ready = false
-    })
-    console.log('on error');
-  });
-  websocket.on('close', () => {
-    console.log('on close');
-  });
+  websocket.on('open', onRoomOpen);
+  websocket.on('error', onRoomError);
+  websocket.on('close', onRoomClose);
 
   if (websocket.ws && websocket.ws.readyState === WebSocket.OPEN) {
     console.log('getInfo room on open');
@@ -174,16 +183,9 @@ const init = async () => {
   storage.local.set('player2avatar', getTouxiang())
 }
 
-onUnmounted(() => {
-  websocket.off('open', ()=>{console.log('off open');});
-  websocket.off('message', ()=>{console.log('off message');});
-  websocket.off('error', ()=>{console.log('off error');});
-  websocket.off('error', ()=>{console.log('off error');});
-});
-
 
 const handleMessage = (data) => {
-  console.log('Received message:', data)
+  console.log('room Received message:', data)
   const parsedData = JSON.parse(data)
   if (parsedData.from != undefined) {
     storage.local.set('user_id', parsedData.from)
@@ -281,6 +283,9 @@ const getLihuiByType = (type) => {
 }
 onBeforeUnmount(() => {
   websocket.off('message', handleMessage)
+  websocket.off('open', onRoomOpen)
+  websocket.off('error', onRoomError)
+  websocket.off('close', onRoomClose)
 })
 
 const isReady=() => {

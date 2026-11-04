@@ -152,7 +152,7 @@ func GenerateUserID() string {
 }
 
 func initDeck() []Card {
-	values := []string{"4", "6", "8", "9", "10", "J", "Q", "K", "A", "3", "2", "5", "鬼", "7"}
+	values := []string{"4", "6", "8", "9", "10"}
 	suits := []string{"♦", "♣", "♥", "♠"}
 	joker := []string{"小", "大"}
 	deck := make([]Card, 0, 54)
