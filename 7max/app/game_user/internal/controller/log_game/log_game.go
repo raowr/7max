@@ -3,6 +3,7 @@ package log_game
 import (
 	"context"
 	v1 "game_user/api/log_game/v1"
+	"time"
 
 	"github.com/gogf/gf/contrib/registry/etcd/v2"
 	"github.com/gogf/gf/contrib/rpc/grpcx/v2"
@@ -49,7 +50,11 @@ func processLogChan() {
 		case <-ctx.Done():
 			g.Log().Infof(ctx, "日志异步任务通道收到退出信号，正在清理...")
 			return
-		case logInfo := <-LogChan: // 直接从通道读取，非阻塞时会等待
+		case logInfo, ok := <-LogChan:
+			if !ok {
+				g.Log().Infof(ctx, "LogChan 已关闭，异步任务通道已退出")
+				return
+			}
 			g.Log().Infof(ctx, "执行日志异步任务: %v", logInfo)
 			sendLogToService(logInfo)
 		}
@@ -73,7 +78,9 @@ func ShutdownLog() {
 }
 
 func sendLogToService(logInfo *v1.SendLogReq) {
-	_, err := logClient.SendLog(gctx.New(), logInfo)
+	ctx, cancel := context.WithTimeout(gctx.New(), 2*time.Second)
+	defer cancel()
+	_, err := logClient.SendLog(ctx, logInfo)
 	if err != nil {
 		g.Log().Error(ctx, err)
 	}

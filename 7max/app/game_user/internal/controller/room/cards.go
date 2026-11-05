@@ -8,6 +8,13 @@ import (
 	"github.com/gogf/gf/v2/frame/g"
 )
 
+// 根据牌id排序
+func (ps *Player) sortByCardId() {
+	sort.Slice(ps.Cards, func(i, j int) bool {
+		return ps.Cards[i].Id < ps.Cards[j].Id
+	})
+}
+
 // 按牌面排序
 func (ps *Player) sortByRank() {
 	sort.Slice(ps.Cards, func(i, j int) bool {

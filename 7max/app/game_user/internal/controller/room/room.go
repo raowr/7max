@@ -12,6 +12,7 @@ import (
 	"game_user/internal/controller/settle"
 	"game_user/internal/service"
 	"math/rand"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -40,7 +41,7 @@ func (room *Room) CreatePlayer(name string, playerType PlayerType) *Player {
 		Name:        name,
 		Type:        playerType,
 		handPattern: make(map[int][][]Card),
-		CardNum:     13,
+		CardNum:     5,
 		Point:       0, //GetGameInitPoint(), //初始积分
 		RoomID:      room.ID,
 		//UserId: 	 generateUserID(),//初始化用户ID
@@ -112,7 +113,7 @@ func (rm *RoomManager) JoinRoom(player *Player, roomID string) bool {
 	}
 
 	// 检查房间是否已满
-	if len(room.Players) >= 4 {
+	if len(room.Players) >= 2 {
 		return false
 	}
 
@@ -175,25 +176,40 @@ func GenerateUserID() string {
 
 // 初始化一副牌
 func initDeck() []Card {
-	var deck []Card
+	values := []string{"4", "6", "8", "9", "10", "J", "Q", "K", "A", "3", "2", "5", "鬼", "7"}
 	suits := []string{"♦", "♣", "♥", "♠"}
-	values := []string{"3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A", "2"}
+	joker := []string{"小", "大"}
+	deck := make([]Card, 0, 54)
 	cardId := 0
 	for i, valueName := range values {
-		for suit, suitName := range suits {
-			cardId++
-			card := Card{
-				Value:    valueName,
-				Suit:     suit,
-				Name:     suitName + valueName,
-				Id:       cardId,
-				Rank:     3 + i,
-				SuitName: suitName,
+		rank := 1 + i
+		isJoker := valueName == "鬼"
+		if isJoker {
+			for s, suitName := range joker {
+				cardId++
+				deck = append(deck, Card{
+					Id:       cardId,
+					Value:    valueName,
+					Suit:     s,
+					Name:     suitName + valueName,
+					Rank:     rank,
+					SuitName: suitName,
+				})
 			}
-			deck = append(deck, card)
+		} else {
+			for s, suitName := range suits {
+				cardId++
+				deck = append(deck, Card{
+					Id:       cardId,
+					Value:    valueName,
+					Suit:     s,
+					Name:     suitName + valueName,
+					Rank:     rank,
+					SuitName: suitName,
+				})
+			}
 		}
 	}
-
 	return deck
 }
 
@@ -213,51 +229,32 @@ func clearPlayerCards(players []*Player) {
 		player.handPattern = make(map[int][][]Card)
 		player.Must = false
 		player.OutCardIds = []int{}
+		player.Win = 0
+		player.InPoint = 0
 	}
 }
 
 // 发牌
-func dealCards(deck []Card, players []*Player) {
-	//每位玩家13张牌
-	for i := 0; i < len(deck); i++ {
-		players[i%4].Cards = append(players[i%4].Cards, deck[i])
+func (room *Room) dealCards() {
+	//每位玩家5张牌
+	for i := 0; i < 10; i++ {
+		room.Players[i%2].Cards = append(room.Players[i%2].Cards, room.Deck[i])
 	}
+	room.Deck = room.Deck[10:]
 }
 
 // 显示玩家的牌
 func (room *Room) showPlayerCards(player *Player) {
-	var logCardsStr string
-	if player.Type == Human {
-		g.Log().Infof(ctx, "%s的牌: ", player.Name)
-		// 创建牌名切片
-		cardNames := make([]string, len(player.Cards))
-		for i, card := range player.Cards {
-			cardNames[i] = card.Name
-		}
-
-		// 使用 strings.Join 连接，自动处理分隔符
-		cardsList := strings.Join(cardNames, ",")
-		g.Log().Infof(ctx, "%s", cardsList)
-		logCardsStr = cardsList
-	} else {
-		g.Log().Infof(ctx, "%s的牌: ", player.Name)
-		logCardsSlice := []string{}
-		for i, v := range player.handPattern {
-			g.Log().Infof(ctx, "牌型：%d,具体的牌：%v ", i, v)
-			var cardNameGroupSlice []string
-			for _, group := range v {
-				var cardNameSlice []string
-				var cardNameStr string
-				for _, card := range group {
-					cardNameSlice = append(cardNameSlice, card.Name)
-				}
-				cardNameStr = "[" + strings.Join(cardNameSlice, ",") + "]"
-				cardNameGroupSlice = append(cardNameGroupSlice, cardNameStr)
-			}
-			logCardsSlice = append(logCardsSlice, fmt.Sprintf("牌型：%d,具体的牌：%v", i, cardNameGroupSlice))
-		}
-		logCardsStr = strings.Join(logCardsSlice, ";")
+	g.Log().Infof(ctx, "%s的牌: ", player.Name)
+	// 创建牌名切片
+	cardNames := make([]string, len(player.Cards))
+	for i, card := range player.Cards {
+		cardNames[i] = card.Name
 	}
+
+	// 使用 strings.Join 连接，自动处理分隔符
+	cardsList := strings.Join(cardNames, ",")
+	g.Log().Infof(ctx, "%s", cardsList)
 	//发送日志 发牌 显示玩家的牌
 	log_game.SendLog(&log_gamev1.SendLogReq{
 		RoomID:     room.ID,
@@ -266,7 +263,7 @@ func (room *Room) showPlayerCards(player *Player) {
 		UserID:     player.UserName,
 		Point:      player.Point, //积分
 		Action:     "showCard",   //行为
-		Remain:     logCardsStr,  //剩余牌
+		Remain:     cardsList,    //剩余牌
 		OutCardIds: "",           //玩家单次打出的牌id
 		Text:       "",           //完整信息
 	})
@@ -276,17 +273,27 @@ func (room *Room) showPlayerCards(player *Player) {
 func bidLandlord(room *Room) {
 	g.Log().Infof(ctx, "\n确定谁先出牌...")
 	currentPlayer := 0
-	for _, v := range room.Players {
-		for _, card := range v.Cards {
-			if card.Id == 1 {
-				currentPlayer = v.ID
-				//必须出牌
-				v.Must = true
-			}
-		}
+	var minCard Card
+	for i, v := range room.Players {
+		v.sortByCardId()
 		v.CardNum = len(v.Cards)
+		if i == 0 {
+			minCard = v.Cards[0]
+			currentPlayer = v.ID
+			continue
+		}
+		if v.Cards[0].Id < minCard.Id {
+			minCard = v.Cards[0]
+			currentPlayer = v.ID
+		}
 	}
-	// ♦3先出牌
+	for _, v := range room.Players {
+		if v.ID == currentPlayer {
+			v.Must = true
+			break
+		}
+	}
+	g.Log().Infof(ctx, "最小牌: %s, 玩家ID: %d", minCard.Name, currentPlayer)
 	room.Current = currentPlayer
 }
 
@@ -334,7 +341,7 @@ func removeCards(player *Player, cardType int, indices []int) {
 		idSet[id] = true
 	}
 
-	if player.Type == Human {
+	if player.Type == Human || !player.ReCard {
 		newCards := make([]Card, 0, len(player.Cards))
 		for _, card := range player.Cards {
 			if !idSet[card.Id] {
@@ -373,12 +380,13 @@ func removeCards(player *Player, cardType int, indices []int) {
 				}
 			}
 			//重新整理牌
-			if len(player.Cards) > 0 {
-				player.handPattern = make(map[int][][]Card)
-				player.Solve()
-			}
+			// if len(player.Cards) > 0 {
+			// 	player.handPattern = make(map[int][][]Card)
+			// 	player.Solve()
+			// }
 		}
 	}
+	player.ReCard = false
 
 }
 
@@ -430,45 +438,50 @@ func aiDecideCards(player, landlord *Player, lastPH int, lastCards []Card) (poke
 	return DecideCards(player, landlord, lastPH, lastCards)
 }
 
-// 检查游戏是否结束,算奖，输家剩几张牌，就输多少积分
-// 赢玩家剩余多少张牌，就赢多少积分
+// 判断游戏结束 有一位玩家打完牌，并且牌已摸完
+// 分数第一的赢，其他玩家本局输的积分是分数差值
 func isGameOver(room *Room) (isOver bool, overMsgData []*overMsg, winName string) {
-	var win int64 = 0
 	var winer *Player
+	//判断游戏结束 有一位玩家打完牌，并且牌已摸完
 	for _, player := range room.Players {
-		win += int64(player.CardNum)
-		if player.CardNum == 0 {
+		if player.CardNum == 0 && len(room.Deck) == 0 {
 			isOver = true
-			winer = player
-			winName = player.Name
 		}
 	}
+	if !isOver {
+		return false, nil, ""
+	}
+	//判断胜利玩家
+	winer = room.Players[0]
+	for _, player := range room.Players {
+		if player.InPoint > winer.InPoint {
+			winer = player
+		}
+	}
+
+	for _, player := range room.Players {
+		if winer.ID != player.ID {
+			winer.Win += winer.InPoint - player.InPoint
+			player.Win -= winer.InPoint - player.InPoint
+		}
+
+	}
+
 	if winer != nil {
-		winer.Win = win
 		room.LastPH = 0
 		for _, player := range room.Players {
 			if player.Type == Human {
-				var playerWin int64
-				if player.ID == winer.ID {
-					player.Point += winer.Win //赢的玩家
-					playerWin = winer.Win     //输的是正数
+				//计算抽水
+				commission := GetGameCommission()
+				if player.Point > commission {
+					player.Point -= commission
 				} else {
-					player.Point -= int64(player.CardNum) //输的玩家
-					playerWin = -int64(player.CardNum)    //输的是负数
-				}
-				//计算抽水,段位房才抽水
-				if room.Type == 1 {
-					commission := GetGameCommission()
-					if player.Point > commission {
-						player.Point -= commission
-					} else {
-						player.Point = 0
-					}
+					player.Point = 0
 				}
 				overMsgData = append(overMsgData, &overMsg{
 					WinName: player.Name,
 					Winner:  player.ID,
-					Win:     playerWin,
+					Win:     player.Win,
 					Point:   player.Point,
 				})
 			}
@@ -490,18 +503,18 @@ func PlayOneGame(room *Room) {
 	// 清空玩家手牌
 	clearPlayerCards(room.Players)
 
-	// 发牌，每位玩家13张牌
-	dealCards(room.Deck, room.Players)
+	// 发牌，每位玩家5张牌
+	room.dealCards()
 
 	// 确定谁先出牌，既方块3在谁那
 	bidLandlord(room)
 
 	//发完牌开始整理机器人的牌
-	for _, player := range room.Players {
-		if int(player.Type) == int(AI) {
-			player.Solve()
-		}
-	}
+	// for _, player := range room.Players {
+	// 	if int(player.Type) == int(AI) {
+	// 		player.Solve()
+	// 	}
+	// }
 	//开始监听玩家出牌
 	// 修复资源泄漏：先关闭旧的订阅
 	// 检查是否已经启动了消息接收 goroutine
@@ -680,6 +693,7 @@ func (room *Room) GameLoop(ctx context.Context) {
 		room.LastCards = make([]Card, 0)
 		room.OutStarTime = 0
 		room.passCount = 0
+		room.TurnDeck = make([]Card, 0)
 		//修复资源泄漏：先关闭旧的订阅
 		room.subClientClose()
 		g.Log().Infof(ctx, "\n游戏结束！恭喜%s！获胜\n", winName)
@@ -949,13 +963,99 @@ func (room *Room) GameLoop(ctx context.Context) {
 		g.Log().Infof(ctx, "%s不出\n", currentPlayer.Name)
 		//通知用户,某位机器人不出牌，
 		msgType = "pass"
-		room.passCount++
-		// 如果三家都不出，重置上一手牌
-		if room.passCount >= 3 {
-			room.LastPH = 0
-			room.LastCards = []Card{}
-			room.passCount = 0
+
+		room.LastPH = 0
+		room.LastCards = []Card{}
+
+		//如果不出牌，就从本轮已出的牌堆中计算分数
+		var inPoint int64 = 0
+		for _, v := range room.TurnDeck {
+			switch v.Value {
+			case "K", "10":
+				inPoint += 10
+			case "5":
+				inPoint += 5
+			default:
+				inPoint += 0
+			}
 		}
+		room.TurnDeck = []Card{}
+		for _, v := range room.Players {
+			if v.ID != currentPlayer.ID {
+				v.InPoint += inPoint
+			}
+		}
+
+		//如果不出牌，就从剩余牌堆中补牌,上一位玩家（赢的）先摸牌
+		prevID := (currentPlayer.ID - 1 + len(room.Players)) % len(room.Players)
+		sort.SliceStable(room.Players, func(i, j int) bool {
+			return room.Players[i].ID == prevID && room.Players[j].ID != prevID
+		})
+		for _, v := range room.Players {
+			for len(v.Cards) < 5 && len(room.Deck) > 0 {
+				v.Cards = append(v.Cards, room.Deck[0])
+				room.Deck = room.Deck[1:]
+			}
+			v.CardNum = len(v.Cards) // 以实际牌数为准
+		}
+		sort.SliceStable(room.Players, func(i, j int) bool {
+			return room.Players[i].ID < room.Players[j].ID
+		})
+		//显示本局积分
+		playerInPoint := make(map[int]int64)
+		for _, v := range room.Players {
+			playerInPoint[v.ID] = v.InPoint
+		}
+
+		playerCardNum := make(map[int]int)
+		for _, v := range room.Players {
+			playerCardNum[v.ID] = v.CardNum
+		}
+
+		room.OutStarTime = 0 //人类出牌时间恢复为0
+		currentPlayer.OutCardIds = make([]int, 0)
+		// 下一个玩家
+		room.Current = (room.Current + 1) % 2
+		room.Turn++
+
+		var mustPid int
+		for _, v := range room.Players {
+			if v.Must {
+				mustPid = v.ID //必须出牌的玩家
+			}
+		}
+		// 显示玩家的牌
+		for _, player := range room.Players {
+			//只能显示自己的牌
+			if player.Type == Human {
+				room.Landlord = player
+				cards := make([]int, 0)
+				for _, card := range room.Landlord.Cards {
+					cards = append(cards, card.Id)
+				}
+				go func(humanPlayer *Player) {
+					data, _ := json.Marshal(struct {
+						Cards          []int         `json:"cards"`
+						Current        int           `json:"current"`
+						InPoint        map[int]int64 `json:"inPoint"`        //玩家本局累计分数
+						MustPid        int           `json:"mustPid"`        //必须出牌的玩家ID
+						AllCardsNum    int           `json:"allCardsNum"`    //剩余未摸的牌数
+						PlayerCardNum  map[int]int   `json:"playerCardNum"`  //玩家当前牌数
+						OutCardTimeout int           `json:"outCardTimeout"` //出牌最大时间(单位秒) /s
+					}{
+						Cards:          cards,
+						Current:        room.Current,
+						InPoint:        playerInPoint,
+						MustPid:        mustPid,
+						AllCardsNum:    len(room.Deck),
+						PlayerCardNum:  playerCardNum,
+						OutCardTimeout: GetOutCardTimeout(), //出牌最大时间(单位秒) /s
+					})
+					room.safeSendRoomMessage(msgType, data)
+				}(player)
+			}
+		}
+
 		//发送日志 玩家不出牌
 		log_game.SendLog(&log_gamev1.SendLogReq{
 			RoomID: room.ID,
@@ -983,6 +1083,57 @@ func (room *Room) GameLoop(ctx context.Context) {
 		room.LastPH = cardType
 		room.LastCards = selectedCards
 		room.passCount = 0
+
+		room.OutStarTime = 0 //人类出牌时间恢复为0
+		currentPlayer.OutCardIds = make([]int, 0)
+		// 下一个玩家
+		room.Current = (room.Current + 1) % 2
+		room.Turn++
+
+		var mustPid int
+		for _, v := range room.Players {
+			if v.Must {
+				mustPid = v.ID //必须出牌的玩家
+			}
+		}
+		// 本轮已出的牌堆
+		room.TurnDeck = append(room.TurnDeck, selectedCards...)
+		cardIds := make([]int, 0)
+		for _, v := range room.TurnDeck {
+			cardIds = append(cardIds, v.Id)
+		}
+		//最后的一手牌
+		lastOutCards := make([]int, 0)
+		for _, v := range selectedCards {
+			lastOutCards = append(lastOutCards, v.Id)
+		}
+
+		//通知用户,出牌，
+		go func() {
+			data, _ := json.Marshal(struct {
+				Pid            int   `json:"pid"`
+				CardIds        []int `json:"cardIds"` //本轮已出的牌堆
+				CardType       int   `json:"card_type"`
+				LastOutCards   []int `json:"lastOutCards"`   //最后的一手牌
+				CardsNum       int   `json:"cards_num"`      //剩余牌数
+				Code           int   `json:"code"`           //0成功,非零失败
+				Current        int   `json:"current"`        //当前出牌玩家
+				MustPid        int   `json:"mustPid"`        //必须出牌的玩家ID
+				OutCardTimeout int   `json:"outCardTimeout"` //出牌最大时间(单位秒) /s
+			}{
+				Pid:            currentPlayer.ID,
+				CardIds:        cardIds,
+				LastOutCards:   lastOutCards,
+				CardType:       cardType,
+				CardsNum:       currentPlayer.CardNum,
+				Code:           0,
+				Current:        room.Current,
+				MustPid:        mustPid,
+				OutCardTimeout: GetOutCardTimeout(), //出牌最大时间(单位秒) /s
+			})
+			room.safeSendRoomMessage(msgType, data)
+		}()
+
 		//发送日志 玩家出牌
 		log_game.SendLog(&log_gamev1.SendLogReq{
 			RoomID:     room.ID,
@@ -995,51 +1146,6 @@ func (room *Room) GameLoop(ctx context.Context) {
 			OutCardIds: showCards(selectedCards),
 		})
 	}
-	room.OutStarTime = now
-	// room.OutStarTime = 0 //人类出牌时间恢复为0
-	currentPlayer.OutCardIds = make([]int, 0)
-	// 下一个玩家
-	room.Current = (room.Current + 1) % 4
-	room.Turn++
-
-	var mustPid int
-	for _, v := range room.Players {
-		if v.Must {
-			mustPid = v.ID //必须出牌的玩家
-		}
-	}
-
-	//修复资源泄漏：先关闭旧的订阅
-	room.subClientClose()
-
-	//缓存当前房间信息
-	roomJsonStr, err := json.Marshal(room)
-	if err != nil {
-		g.Log().Error(ctx, err)
-	}
-	service.Cache().Set(ctx, consts.RoomInfoPrefix+room.ID, roomJsonStr, 24*time.Hour)
-
-	//通知用户,出牌，
-	data, _ := json.Marshal(struct {
-		Pid            int   `json:"pid"`
-		CardIds        []int `json:"cardIds"`
-		CardType       int   `json:"card_type"`
-		CardsNum       int   `json:"cards_num"`      //剩余牌数
-		Code           int   `json:"code"`           //0成功,非零失败
-		Current        int   `json:"current"`        //当前出牌玩家
-		MustPid        int   `json:"mustPid"`        //必须出牌的玩家ID
-		OutCardTimeout int   `json:"outCardTimeout"` //出牌最大时间(单位秒) /s
-	}{
-		Pid:            currentPlayer.ID,
-		CardIds:        indices,
-		CardType:       cardType,
-		CardsNum:       currentPlayer.CardNum,
-		Code:           0,
-		Current:        room.Current,
-		MustPid:        mustPid,
-		OutCardTimeout: GetOutCardTimeout(), //出牌最大时间(单位秒) /s
-	})
-	room.safeSendRoomMessage(msgType, data)
 
 }
 

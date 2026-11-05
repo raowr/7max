@@ -62,6 +62,8 @@ type Player struct {
 	ReCard      bool             //是否需要重新整理牌
 	Point       int64            //积分，总积分
 	UserName    string           //用户名
+	InPoint     int64            //游戏中积分
+
 }
 
 // 房间结构体
@@ -87,6 +89,7 @@ type Room struct {
 	pubClient    *gredis.Redis          `json:"-"` // 忽略
 	MsgQueue     chan *v1.SendActionReq `json:"-"` // 忽略
 	MsgCancel    context.CancelFunc     `json:"-"` // 忽略 ← 核心问题
+	TurnDeck     []Card                 //当前牌组
 }
 
 // 房间管理器

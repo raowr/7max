@@ -634,14 +634,20 @@ func (c *Controller) handleGetInfo(ctx context.Context, req *v1.SendActionReq) {
 		}
 	}
 
-	// 上一次出牌
+	// 本轮已出的牌堆
 	outCards := make([]int, 0)
-	for _, card := range roomInfo.LastCards {
+	for _, card := range roomInfo.TurnDeck {
 		outCards = append(outCards, card.Id)
 	}
 
+	// 最后的一手牌（用于前端比较大小）
+	lastOutCards := make([]int, 0)
+	for _, card := range roomInfo.LastCards {
+		lastOutCards = append(lastOutCards, card.Id)
+	}
+
 	// 上一位出牌玩家
-	lastPid := (current - 1 + 4) % 4
+	lastPid := (current - 1 + 2) % 2
 
 	// 创建一个临时结构体，只包含可序列化的字段
 	playerDTOs := getPlayers(roomInfo)
@@ -661,7 +667,9 @@ func (c *Controller) handleGetInfo(ctx context.Context, req *v1.SendActionReq) {
 		MustPid              int                 `json:"mustPid"`
 		LastPid              int                 `json:"lastPid"`
 		Status               int                 `json:"status"`
-		Type                 int                 `json:"type"` //房间类型 1比赛房，2好友房
+		Type                 int                 `json:"type"`         //房间类型 1比赛房，2好友房
+		LastOutCards         []int               `json:"lastOutCards"` //最后的一手牌
+		AllCardsNum          int                 `json:"allCardsNum"`  //剩余未摸的牌数
 	}{
 		RoomId:               roomInfo.ID,
 		Players:              playerDTOs,
@@ -677,6 +685,8 @@ func (c *Controller) handleGetInfo(ctx context.Context, req *v1.SendActionReq) {
 		LastPid:              lastPid,
 		Status:               status,
 		Type:                 roomType,
+		LastOutCards:         lastOutCards,
+		AllCardsNum:          len(roomInfo.TurnDeck),
 	})
 	if err != nil {
 		g.Log().Errorf(ctx, "用户 %s 序列化房间信息失败: %v", req.From, err)

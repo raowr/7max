@@ -56,6 +56,7 @@ type PlayerDTO struct {
 	UserId   string `json:"UserId"`
 	RoomType int    `json:"RoomType"`
 	// 只包含需要序列化的字段，排除MsgChan等不可序列化字段
+	InPoint int64 `json:"InPoint"` //游戏中积分
 }
 
 func init() {
@@ -145,6 +146,7 @@ func getPlayers(roomInfo *room.Room) []*PlayerDTO {
 			Point:    p.Point,
 			UserId:   p.UserName,
 			RoomType: roomInfo.Type,
+			InPoint:  p.InPoint,
 		}
 	}
 	return playerDTOs
