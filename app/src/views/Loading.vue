@@ -73,7 +73,7 @@ import { websocket } from '@/utils/websocket'
 import { audioManager } from '@/utils/audio'
 
 // 1. 显式引入所有需要预加载的图片（确保 Vite 打包时包含这些资源）
-import cg4Img from '@/assets/img/cg/cg4.png';
+import cgImg from '@/assets/img/cg/cg.png';
 //index.vue 预加载资源
 import titleBgImg from '@/assets/img/ui/title_bg.png';
 import friendRoomImg from '@/assets/img/ui/txt_friendroom.png';
@@ -216,7 +216,7 @@ export default {
       },
       // 所有需要预加载的图片路径（根据实际项目补充）
       imagePaths: [
-        // cg4Img,       // 直接使用 import 后的变量
+        // cgImg,       // 直接使用 import 后的变量
         titleBgImg,   // 新增：标题背景
         friendRoomImg, // 新增：好友房间
         return2Img,   // 新增：返回2图标
@@ -351,7 +351,7 @@ export default {
     // 新增：动态计算背景样式
     backgroundStyle() {
       return {
-        backgroundImage: this.backgroundLoaded ? `url(${cg4Img})` : 'none',
+        backgroundImage: this.backgroundLoaded ? `url(${cgImg})` : 'none',
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundRepeat: 'no-repeat'
@@ -381,7 +381,7 @@ export default {
           this.backgroundLoaded = false;
           resolve(); // 即使失败也继续
         };
-        img.src = cg4Img; // 直接使用导入的变量，不需要 require
+        img.src = cgImg; // 直接使用导入的变量，不需要 require
       });
     },
     // 新增：统一预加载图片和音频
@@ -430,7 +430,11 @@ export default {
       // 如果有用户信息，尝试连接 websocket
       const node = userData.node || userData.Node;
       if (!node) {
-        console.log('用户信息不完整');
+        console.log('用户信息 node 不完整');
+        return;
+      }
+      if (!userData.username || !userData.token) {
+        console.log('用户信息 username 或 token 不完整');
         return;
       }
       // 尝试连接 websocket
@@ -440,12 +444,26 @@ export default {
     toIndex() {
         // 延迟连接 WebSocket，确保应用先加载
         let wsUrl = import.meta.env.VITE_WS_URL;
+        let wsPart = import.meta.env.VITE_WS_PART;
+        // 读取已有用户信息并保留 username/token，只更新 node，避免把登录信息覆盖成空
+        let storedUser = storage.local.get("user");
+        let userData = {};
+        if (storedUser) {
+          try {
+            userData = (typeof storedUser === 'string') ? JSON.parse(storedUser) : storedUser;
+          } catch (e) {
+            userData = {};
+          }
+        }
+        // node 仅作占位；连接 URL 统一在 reconnectWebSocket/此处用 VITE_WS_URL 拼
+        userData.node = wsUrl;
+        storage.local.set("user", userData)
       setTimeout(() => {
         if (wsUrl) {
           console.log('user_id:', storage.local.get("user_id"))
     // 初始化 WebSocket 配置（全局一次）
           websocket.init({
-            url: wsUrl+"?user_id="+storage.local.get("user_id"), // 后端地址
+            url: `ws://${wsUrl}${wsPart}?user_id=`+storage.local.get("user_id"), // 后端地址
             reconnectInterval: 5000, // 5秒重连一次
             heartbeatInterval: 10000 // 20秒一次心跳
           });
@@ -455,7 +473,7 @@ export default {
         } else {
           console.warn('VITE_WS_URL is not defined, using default WebSocket URL')
           // 可以在这里设置一个默认的 WebSocket URL
-          websocket.connect('ws://127.0.0.1:8000/enter')
+          websocket.connect(`ws://${wsUrl}${wsPart}`)
         }
       }, 100)
       this.$router.push('/index');
@@ -488,6 +506,7 @@ export default {
         const token = userData.token || userData.Token;
         
         // 构建 WebSocket URL
+        // node 为纯地址(不含协议和 /enter)，统一加协议和路径
         const wsUrl = `ws://${node}/enter?user_name=${encodeURIComponent(username)}&token=${encodeURIComponent(token)}`;
         
         console.log('尝试连接 WebSocket:', wsUrl);

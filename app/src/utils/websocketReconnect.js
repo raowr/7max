@@ -23,7 +23,8 @@ export const reconnectWebSocket = (websocket) => {
     }
 
     // 构建 WebSocket URL
-    const wsUrl = `ws://${node}/enter?user_name=${encodeURIComponent(username)}&token=${encodeURIComponent(token)}`;
+    // node 为纯地址(不含协议和 /enter)，统一加协议和路径
+    const wsUrl = `ws://${node}/enter?user_id=${storage.local.get("user_id")}&user_name=${encodeURIComponent(username)}&token=${encodeURIComponent(token)}`;
     console.log('[WS Reconnect] 尝试重连 WebSocket:', wsUrl);
 
     // 如果当前没有连接、连接已关闭或正在关闭，才重新初始化

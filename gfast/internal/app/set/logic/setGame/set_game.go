@@ -75,7 +75,7 @@ func (s *sSetGame) Update(ctx context.Context, req *set.SetGameUpdateReq) (err e
 			serChace.Cache().Set(ctx, req.Key, req.Value, 0)
 			if e == nil {
 				go func() {
-					res := client.PostContent(ctx, `http://api-service.svc/set`, g.Map{
+					res := client.PostContent(ctx, `http://7max_api-service.svc/set`, g.Map{
 						"key":   req.Key,
 						"value": req.Value,
 					})
